@@ -2,62 +2,84 @@
 
 **Lab-to-Real Object ID · IE 7615 Discriminative Deep Learning Project**
 
-Can an object detector trained on synthetic image composites generalize to real photographs with clutter, occlusion, and scale changes?
+Can YOLOv8 trained on synthetic composites generalize to real photographs with clutter, occlusion, and scale changes?
 
-This project studies that question using grid-concatenated and mask-based copy-paste training images, YOLOv8, and a controlled evaluation protocol. A separate classification benchmark supports single-object identification.
+This project compares grid concatenation with mask-based copy-paste training data, evaluates synthetic-to-real generalization, and plans a reproducible CPU inference service. A separate Keras/TensorFlow benchmark supports single-object classification.
 
-> **Status: planning and setup.** The repository has been initialized. Training results, detection examples, inference benchmarks, and a runnable service have not been published. Features below are planned unless explicitly marked complete.
+> **Status: planning and setup (October 16, 2026).** This repository currently contains project documentation. Training code, measured results, a runnable service, and CI/CD workflows have not been published. The implementation below is planned.
 
-## Scope
+## Project scope
 
-- **Shared dataset:** 20 course object IDs, approximately 100 single-object images per class; a complete data audit is pending.
-- **Classification:** compare at least three distinct image architectures on identical source splits. Planned candidates are a custom CNN, MobileNetV2, ResNet-50, and optionally EfficientNet-B0. Hyperparameter variants count as one architecture.
-- **Detection:** fine-tune YOLOv8n on randomly concatenated single-object images, generating at least 100 multi-object images for the course requirement.
-- **Synthetic-data experiment:** compare grid-only training against a fixed-size mixture of grid and copy-paste images, controlling data volume and training budget.
-- **Real-world evaluation:** an OBJ011-only case study using separately collected real photographs. This does **not** establish real-world performance across all 20 classes.
-- **Ownership:** instructor-approved solo completion of the group assignment, with no teammates. The shared class dataset is used for training; the student's own source-image contribution is OBJ011.
+- **Dataset:** 20 shared course object IDs, approximately 100 single-object images per class; the full data audit is pending. Source-image collection contributes OBJ011.
+- **Classification:** implement and compare at least three distinct architectures using Keras/TensorFlow: custom CNN, MobileNetV2 and ResNet-50; EfficientNet-B0 is the fourth candidate if time permits. Hyperparameter variants do not count as additional architectures. Use each model's required preprocessing and justify the best model using validation performance and accuracy/speed/size trade-offs.
+- **Detection:** fine-tune Ultralytics YOLOv8n (PyTorch), generating at least 100 multi-object images by concatenating randomly selected single-object images.
+- **Controlled experiment:** compare 1,500 grid training images against 750 of those grid images plus 750 copy-paste images, controlling object counts and training budget. Target three training seeds per arm; a single-seed result is reported as preliminary.
+- **Real-photo evaluation:** evaluate OBJ011 in clutter using session-separated validation/test photographs, including no-target images. This is a one-object case study, not evidence of real-world performance across all 20 classes.
 
-## Evaluation design
+## Evaluation and reproducibility
 
-1. Group near-duplicate source images before splitting into train, validation, and test sets.
-2. Build each synthetic split only from its corresponding source split. Keep real validation and test photographs separated by shooting session.
-3. Select models, checkpoints, and confidence thresholds using validation data. Reserve test data for reporting frozen choices.
-4. Use reviewed masks to derive visible-object boxes and update labels after geometric transformations and occlusion.
-5. Report classification accuracy and macro-F1; detection mAP@0.5 and mAP@0.5:0.95; and real-case recall, matched-box IoU, and false positives per image.
-6. Track configurations, seeds, code revisions, data manifests, generation records, and model artifacts. Report repeated-seed variation when compute permits.
+1. Group near-duplicate source images before a fixed train/validation/test split; generate composites only from their corresponding source split.
+2. Keep one shared class map between continuous model indices and course IDs such as `OBJ011`.
+3. Review segmentation masks and derive visible-object boxes after scaling, rotation, clipping and occlusion.
+4. Select architectures, checkpoints and thresholds on validation data; report frozen choices on held-out data.
+5. Report classification accuracy/macro-F1 and confusion matrices; detection mAP@0.5 and mAP@0.5:0.95; and real-case recall, matched-box IoU and false positives per image.
+6. Record configurations, seeds, code revisions, dataset checksums and model artifacts with MLflow (portable JSON/CSV records as a fallback). Store per-composite generation records for sample regeneration.
+
+**Compute plan:** M1 classification runs on Google Colab. From M2, multi-run detection experiments are planned for the university HPC cluster using Slurm, with Colab as fallback. Persist run outputs on storage appropriate to each environment. CPU deployment benchmarks name the exact machine and compare runtimes under matched conditions.
 
 ## Planned engineering work
 
-| Area | Planned implementation | Evidence to publish |
+| Area | Implementation | Evidence to publish |
 | --- | --- | --- |
-| Reproducibility | MLflow tracking and per-composite generation records | Run-linked results and regeneration examples |
-| CPU inference | PyTorch FP32, ONNX Runtime FP32, OpenVINO FP32/INT8 | Accuracy, mean/p95 latency, memory, artifact size, and startup comparisons |
-| Serving | FastAPI classification/detection endpoints and SQLite prediction history | API examples and versioned responses |
-| Packaging and tests | Docker, pytest, real-model behavioral checks, GitHub Actions CI | Runnable instructions and test results |
-| Service performance | Fixed-workload load tests at concurrency 1, 2, and 4 | Throughput, client p95 latency, errors, and peak memory |
-| Model releases | Validated immutable model bundles and restart-based rollback | Bundle metadata and a recorded rollback exercise |
+| Experiment and data tracking | MLflow, dataset manifests, composite-generation records | Traceable results and regeneration examples |
+| Detector CPU inference | PyTorch FP32, ONNX Runtime FP32, OpenVINO FP32/INT8 | Accuracy, mean/p95 latency, memory, artifact size and startup comparisons |
+| Serving | FastAPI classification/detection endpoints, SQLite prediction history | API examples and model/runtime version information |
+| Testing | pytest, real-model smoke/behavioral tests, coordinate and class-map checks | Reproducible test commands and CI results |
+| Load testing | Fixed workload at concurrency 1, 2 and 4 | Successful requests/s, client p95, errors/timeouts and peak memory |
+| Model releases | Validated immutable bundles and restart-based rollback | Code/model checksums, readiness checks and recovery logs |
+| Continuous delivery | GitHub Actions checks, Docker build/container verification, GHCR publication | Versioned image digests, release manifests and clean pull/run verification |
 
-Course deliverables take priority. API packaging, load testing, and complete release/rollback workflows are scheduled for the post-course portfolio phase.
+The four-runtime benchmark applies to the detector. The classifier's native correctness baseline is Keras/TensorFlow; any classifier export is checked against that baseline.
+
+### Planned CI/CD flow
+
+`Pull request → CI checks → merge to main → checks for that commit → Docker build → real-model container smoke test → publish tested image to GHCR`
+
+Failed checks block publication. Image releases identify the exact code commit and model bundle; run and rollback commands pin the image digest. The registry package remains private while this repository is private. A previous image/bundle is retained for a verified restart-based recovery, with SQLite history persisted across restarts.
+
+This is **continuous delivery** of a runnable image, followed by manual deployment. Automated deployment to a hosted service is not currently in scope. CI/CD is a planned capability, not an implemented feature.
+
+## Delivery plan
+
+| Phase | Focus |
+| --- | --- |
+| M1 · Oct 17 | At least three distinct classifiers, comparison and justified selection; PDF report within five pages including the front page |
+| M2 · Oct 27 | Synthetic multi-object dataset, YOLOv8 training and ID/location outputs |
+| M3 · Nov 3 | Completed detection model and live single/multi-object demonstration |
+| M4 · Nov 10 | Final deliverables subject to instructor details; prioritize report and core results, then detector runtime comparison |
+| Nov 11–24 | API, Docker, tests, remaining runtime measurements, model bundles/rollback and GHCR delivery |
+| Nov 25–Dec 8 | Load tests, published-image pull/run and recovery verification, reproduction walkthrough and portfolio documentation |
+
+Course deliverables take priority. If dates move, document the revised schedule; do not present pending features as completed.
 
 ## Results and examples
 
-No measured results are available yet. This section will contain:
+No measured results have been published. Planned evidence includes:
 
-- Classification comparison across at least three architectures, with the best model justified.
-- Grid-only versus grid + copy-paste detection results on held-out synthetic sets.
-- OBJ011 real-photo case-study results, sample detections, and failure examples.
-- FP32/INT8 runtime and resource comparisons with hardware and measurement conditions.
-
-Targets and planned features are not reported as achieved results.
+- Classification results across at least three architectures, with the selection rationale.
+- Grid-only vs grid + copy-paste results on held-out grid and hard synthetic sets.
+- OBJ011 real-photo detections and failures, with case-study limits stated.
+- Detector FP32/INT8 accuracy, latency and resource tables with measurement conditions.
+- API concurrency results and a versioned-image rollback demonstration.
 
 ## Running the project
 
-Executable training and serving code has not been published yet. Setup, reproduction, and Docker/API commands will be added alongside verified implementations.
+Executable training and serving code has not been published. Verified setup, reproduction, Docker and API instructions will accompany each implementation. Final evaluation images will not be used as routine CI fixtures.
 
 ## References
 
-- [Simple Copy-Paste implementation in MMDetection](https://github.com/open-mmlab/mmdetection/tree/main/configs/simple_copy_paste): mask-aware compositing and label updates.
+- [MMDetection Simple Copy-Paste](https://github.com/open-mmlab/mmdetection/tree/main/configs/simple_copy_paste): mask-aware compositing and label updates.
 - [Made With ML](https://github.com/GokuMohandas/Made-With-ML): experiment tracking and code/data/model testing practices.
-- [Warehouse Box Detection](https://github.com/abhijeetgupta23/Box-Detection-in-Warehouse-using-Vision-Based-ML-Engineering): a related training-to-API-to-Docker project.
+- [Warehouse Box Detection](https://github.com/abhijeetgupta23/Box-Detection-in-Warehouse-using-Vision-Based-ML-Engineering): related training-to-API-to-Docker delivery.
 
-Adapted code will retain its required license and attribution notices. Reference-project results are not results of this project.
+Adapted code will retain required license and attribution notices. Reference-project results are not results of this project.
