@@ -1,0 +1,30 @@
+# Kept locally, not published
+proposal.md
+*_zh.ipynb
+*_zh.py
+
+# Reports: the cover page carries personal contact details
+*.docx
+*.pdf
+
+# Model weights (yolov8n.pt is downloaded automatically; trained weights will be release assets)
+*.pt
+*.keras
+*.onnx
+
+# Copy of m2/src/m2_detection.py used only in the cluster bundle
+hpc_m2/code/
+
+# Run outputs and caches
+hpc_m2/logs/*
+!hpc_m2/logs/.keep
+hpc_m2/ycfg/*
+!hpc_m2/ycfg/.keep
+hpc_m2/work/
+hpc_m2/data/raw/*
+!hpc_m2/data/raw/PUT_IMAGE_FOLDERS_HERE.txt
+m3/annotated*.jpg
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store

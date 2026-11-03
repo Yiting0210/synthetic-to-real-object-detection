@@ -1,0 +1,1 @@
+Put classes.json and split_manifest.csv from Drive IE7615_project/runs/m1_20261018_022316/data/ here. Do not open them in Excel.

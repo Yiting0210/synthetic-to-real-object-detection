@@ -6,7 +6,18 @@ Can YOLOv8 trained on synthetic composites generalize to real photographs with c
 
 This project compares grid concatenation with mask-based copy-paste training data, evaluates synthetic-to-real generalization, and plans a reproducible CPU inference service. A separate Keras/TensorFlow benchmark supports single-object classification.
 
-> **Status: planning and setup (October 16, 2026).** This repository currently contains project documentation. Training code, measured results, a runnable service, and CI/CD workflows have not been published. The implementation below is planned.
+> **Status (November 3, 2026):** course milestones M1–M3 are implemented — classifier comparison, grid-concatenated detection data with YOLOv8n, and a local demo. The copy-paste comparison, real-photo evaluation, runtime benchmarks, service and CI/CD below are still planned.
+
+## Repository contents
+
+| Folder | What it contains |
+| --- | --- |
+| `m1/` | `m1_classification.ipynb`: data checks, near-duplicate grouping, grouped split, four classifiers, validation-based selection, test results (executed on Colab T4) |
+| `m2/` | `m2_detection.ipynb`: object masks, grid-composite generation, YOLOv8n fine-tuning, threshold on validation, test results (executed); `src/` holds the notebook source; `M2_report.md` and `figures/` |
+| `m3/` | `predict.py` (single image → ID; multi-object image → IDs and boxes) and `demo_app.py` (local Gradio demo); see `m3/README.md` |
+| `hpc_m2/` | Slurm job and environment setup to run M2 on a cluster |
+
+Data, trained weights and run outputs are not in the repository; the notebooks read the course dataset from Google Drive.
 
 ## Project scope
 
@@ -64,7 +75,14 @@ Course deliverables take priority. If dates move, document the revised schedule;
 
 ## Results and examples
 
-No measured results have been published. Planned evidence includes:
+Measured so far (single runs, seed 42, Colab Tesla T4):
+
+| Task | Result |
+| --- | --- |
+| M1 classification (303 test images, 20 classes) | MobileNetV2 selected on validation: test accuracy 0.993, macro-F1 0.993 (2.28 M parameters); EfficientNet-B0 1.000, ResNet-50 0.997, custom CNN 0.891 |
+| M2 detection (300 grid-composite test images, 1,154 objects) | YOLOv8n: mAP@0.5 0.908, mAP@0.5:0.95 0.738 |
+
+The detection test set is built like the training data, so it measures in-distribution performance only. Still planned:
 
 - Classification results across at least three architectures, with the selection rationale.
 - Grid-only vs grid + copy-paste results on held-out grid and hard synthetic sets.
@@ -74,7 +92,10 @@ No measured results have been published. Planned evidence includes:
 
 ## Running the project
 
-Executable training and serving code has not been published. Verified setup, reproduction, Docker and API instructions will accompany each implementation. Final evaluation images will not be used as routine CI fixtures.
+- **M1 / M2:** open the notebook in Colab with a T4 GPU, add a Drive shortcut to the course data folder, and run all cells; outputs are written to `IE7615_project/runs/` on Drive.
+- **M3 demo (local CPU):** put the trained models in `m3/models/` and follow `m3/README.md`; the demo runs at `http://127.0.0.1:7860` on the local machine.
+
+Docker and API instructions will accompany those implementations. Final evaluation images will not be used as routine CI fixtures.
 
 ## References
 

@@ -1,0 +1,5 @@
+tensorflow>=2.16,<2.22
+ultralytics>=8.3,<9
+gradio>=4.40,<6
+pillow
+numpy
