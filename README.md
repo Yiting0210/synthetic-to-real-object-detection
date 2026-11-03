@@ -4,9 +4,9 @@
 
 Can YOLOv8 trained on synthetic composites generalize to real photographs with clutter, occlusion, and scale changes?
 
-This project compares grid concatenation with mask-based copy-paste training data, evaluates synthetic-to-real generalization, and plans a reproducible CPU inference service. A separate Keras/TensorFlow benchmark supports single-object classification.
+This project compares grid concatenation with mask-based copy-paste training data, evaluates synthetic-to-real generalization, and adds ML-specific engineering: experiment tracking, a model registry with rollback, and CI that checks the real exported model. A separate Keras/TensorFlow benchmark supports single-object classification.
 
-> **Status (November 3, 2026):** course milestones M1–M3 are implemented — classifier comparison, grid-concatenated detection data with YOLOv8n, and a local demo. The copy-paste comparison, real-photo evaluation, runtime benchmarks, service and CI/CD below are still planned.
+> **Status (November 3, 2026):** course milestones M1–M3 are implemented — classifier comparison, grid-concatenated detection data with YOLOv8n, and a local demo. The copy-paste comparison, real-photo evaluation, runtime benchmarks and the engineering work below are still planned.
 
 ## Repository contents
 
@@ -21,8 +21,8 @@ Data, trained weights and run outputs are not in the repository; the notebooks r
 
 ## Project scope
 
-- **Dataset:** 20 shared course object IDs, approximately 100 single-object images per class; the full data audit is pending. Source-image collection contributes OBJ011.
-- **Classification:** implement and compare at least three distinct architectures using Keras/TensorFlow: custom CNN, MobileNetV2 and ResNet-50; EfficientNet-B0 is the fourth candidate if time permits. Hyperparameter variants do not count as additional architectures. Use each model's required preprocessing and justify the best model using validation performance and accuracy/speed/size trade-offs.
+- **Dataset:** 20 shared course object IDs, 2,022 single-object images (224×224, 100–114 per class), audited in M1. Source-image collection contributes OBJ011.
+- **Classification:** implement and compare at least three distinct architectures using Keras/TensorFlow: custom CNN, MobileNetV2, ResNet-50 and EfficientNet-B0. Hyperparameter variants do not count as additional architectures. Use each model's required preprocessing and justify the best model using validation performance and accuracy/speed/size trade-offs.
 - **Detection:** fine-tune Ultralytics YOLOv8n (PyTorch), generating at least 100 multi-object images by concatenating randomly selected single-object images.
 - **Controlled experiment:** compare 1,500 grid training images against 750 of those grid images plus 750 copy-paste images, controlling object counts and training budget. Target three training seeds per arm; a single-seed result is reported as preliminary.
 - **Real-photo evaluation:** evaluate OBJ011 in clutter using session-separated validation/test photographs, including no-target images. This is a one-object case study, not evidence of real-world performance across all 20 classes.
@@ -36,29 +36,21 @@ Data, trained weights and run outputs are not in the repository; the notebooks r
 5. Report classification accuracy/macro-F1 and confusion matrices; detection mAP@0.5 and mAP@0.5:0.95; and real-case recall, matched-box IoU and false positives per image.
 6. Record configurations, seeds, code revisions, dataset checksums and model artifacts with MLflow (portable JSON/CSV records as a fallback). Store per-composite generation records for sample regeneration.
 
-**Compute plan:** M1 classification runs on Google Colab. From M2, multi-run detection experiments are planned for the university HPC cluster using Slurm, with Colab as fallback. Persist run outputs on storage appropriate to each environment. CPU deployment benchmarks name the exact machine and compare runtimes under matched conditions.
+**Compute plan:** M1 and M2 ran on Google Colab (Tesla T4). The multi-seed detection comparison is planned for the university HPC cluster using Slurm (`hpc_m2/`), with Colab as fallback. Persist run outputs on storage appropriate to each environment. CPU deployment benchmarks name the exact machine and compare runtimes under matched conditions.
 
 ## Planned engineering work
 
+The engineering scope is limited to ML-specific practices; general software CI/CD, data pipelines, monitoring and load testing are not part of this project.
+
 | Area | Implementation | Evidence to publish |
 | --- | --- | --- |
-| Experiment and data tracking | MLflow, dataset manifests, composite-generation records | Traceable results and regeneration examples |
-| Detector CPU inference | PyTorch FP32, ONNX Runtime FP32, OpenVINO FP32/INT8 | Accuracy, mean/p95 latency, memory, artifact size and startup comparisons |
-| Serving | FastAPI classification/detection endpoints, SQLite prediction history | API examples and model/runtime version information |
-| Testing | pytest, real-model smoke/behavioral tests, coordinate and class-map checks | Reproducible test commands and CI results |
-| Load testing | Fixed workload at concurrency 1, 2 and 4 | Successful requests/s, client p95, errors/timeouts and peak memory |
-| Model releases | Validated immutable bundles and restart-based rollback | Code/model checksums, readiness checks and recovery logs |
-| Continuous delivery | GitHub Actions checks, Docker build/container verification, GHCR publication | Versioned image digests, release manifests and clean pull/run verification |
+| Experiment tracking | MLflow with a local SQLite backend; Colab and HPC run records (JSON/CSV) imported by script | Every reported number traces to a run with its code commit, configuration, data checksums and model |
+| Model registry and rollback | MLflow Model Registry; `champion` / `previous` aliases; exported model bundles with checksums | A recorded rollback to the previous version, confirmed through the service response |
+| Model-aware CI | GitHub Actions running checks on a pinned, exported detector: class map, letterbox coordinates, ONNX vs PyTorch outputs, known-object detection | CI run history on every push |
+| Minimal inference service | FastAPI `POST /detect` (then `/classify`), Docker image with the model bundle mounted read-only, pytest | Tested API calls that report the model version |
+| Detector CPU inference | PyTorch FP32, ONNX Runtime FP32, OpenVINO FP32/INT8 | Accuracy, mean/p95 latency, memory, artifact size and load time under matched conditions |
 
-The four-runtime benchmark applies to the detector. The classifier's native correctness baseline is Keras/TensorFlow; any classifier export is checked against that baseline.
-
-### Planned CI/CD flow
-
-`Pull request → CI checks → merge to main → checks for that commit → Docker build → real-model container smoke test → publish tested image to GHCR`
-
-Failed checks block publication. Image releases identify the exact code commit and model bundle; run and rollback commands pin the image digest. The registry package remains private while this repository is private. A previous image/bundle is retained for a verified restart-based recovery, with SQLite history persisted across restarts.
-
-This is **continuous delivery** of a runnable image, followed by manual deployment. Automated deployment to a hosted service is not currently in scope. CI/CD is a planned capability, not an implemented feature.
+The four-runtime benchmark applies to the detector. The classifier's native correctness baseline is Keras/TensorFlow; any classifier export is checked against that baseline. No speed or accuracy number is published for an export that has not passed the class-map, preprocessing and coordinate checks.
 
 ## Delivery plan
 
@@ -67,9 +59,9 @@ This is **continuous delivery** of a runnable image, followed by manual deployme
 | M1 · Oct 17 | At least three distinct classifiers, comparison and justified selection; PDF report within five pages including the front page |
 | M2 · Oct 27 | Synthetic multi-object dataset, YOLOv8 training and ID/location outputs |
 | M3 · Nov 3 | Completed detection model and live single/multi-object demonstration |
-| M4 · Nov 10 | Final deliverables subject to instructor details; prioritize report and core results, then detector runtime comparison |
-| Nov 11–24 | API, Docker, tests, remaining runtime measurements, model bundles/rollback and GHCR delivery |
-| Nov 25–Dec 8 | Load tests, published-image pull/run and recovery verification, reproduction walkthrough and portfolio documentation |
+| M4 · Nov 10 | Final report and models; then detector runtime comparison (at least PyTorch FP32 vs OpenVINO INT8) |
+| Nov 11–24 | Remaining runtime measurements, FastAPI + Docker, model-aware CI, MLflow import and Model Registry with a rollback demonstration, README results linked to runs |
+| December (optional) | Open-set rejection, webcam demo, and a single-object data-drift case study |
 
 Course deliverables take priority. If dates move, document the revised schedule; do not present pending features as completed.
 
@@ -84,11 +76,10 @@ Measured so far (single runs, seed 42, Colab Tesla T4):
 
 The detection test set is built like the training data, so it measures in-distribution performance only. Still planned:
 
-- Classification results across at least three architectures, with the selection rationale.
 - Grid-only vs grid + copy-paste results on held-out grid and hard synthetic sets.
 - OBJ011 real-photo detections and failures, with case-study limits stated.
 - Detector FP32/INT8 accuracy, latency and resource tables with measurement conditions.
-- API concurrency results and a versioned-image rollback demonstration.
+- MLflow-tracked runs, a Model Registry rollback demonstration, and CI history of the real-model checks.
 
 ## Running the project
 
