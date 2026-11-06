@@ -6,18 +6,18 @@ Can YOLOv8 trained on synthetic composites generalize to real photographs with c
 
 This project compares grid concatenation with mask-based copy-paste training data, evaluates synthetic-to-real generalization, and adds ML-specific engineering: experiment tracking, a model registry with rollback, and CI that checks the real exported model. A separate Keras/TensorFlow benchmark supports single-object classification.
 
-> **Status (November 3, 2026):** course milestones M1–M3 are implemented — classifier comparison, grid-concatenated detection data with YOLOv8n, and a local demo. The copy-paste comparison, real-photo evaluation, runtime benchmarks and the engineering work below are still planned.
+> **Status (November 6, 2026):** course milestones M1–M3 are done — classifier comparison, grid-concatenated detection data with YOLOv8n, and a local demo. After the M2 submission, the detector was retrained on the university cluster with reviewed masks (same code). The copy-paste comparison, real-photo evaluation, runtime benchmarks and the engineering work below are still planned.
 
 ## Repository contents
 
 | Folder | What it contains |
 | --- | --- |
 | `m1/` | `m1_classification.ipynb`: data checks, near-duplicate grouping, grouped split, four classifiers, validation-based selection, test results (executed on Colab T4) |
-| `m2/` | `m2_detection.ipynb`: object masks, grid-composite generation, YOLOv8n fine-tuning, threshold on validation, test results (executed); `src/` holds the notebook source; `M2_report.md` and `figures/` |
+| `m2/` | `src/m2_detection.py`: object masks, grid-composite generation, YOLOv8n fine-tuning, threshold on validation, test results (run as a notebook on Colab or as a script on the cluster). Results of the current (retrained) run: `M2_results_retrained.md`, `figures/`, `records/`, `models/README.md`; `data/` holds the mask review, mask and composite manifests and the per-composite generation records |
 | `m3/` | `predict.py` (single image → ID; multi-object image → IDs and boxes) and `demo_app.py` (local Gradio demo); see `m3/README.md` |
-| `hpc_m2/` | Slurm job and environment setup to run M2 on a cluster |
+| `hpc_m2/` | Slurm job and environment setup to run M2 on the Explorer cluster |
 
-Data, trained weights and run outputs are not in the repository; the notebooks read the course dataset from Google Drive.
+The M2 version submitted on Oct 27 (executed Colab notebook, report and figures) is kept under the git tag [`m2-submitted`](../../tree/m2-submitted). Data, run outputs and the mask cache are not in the repository; the notebooks read the course dataset from Google Drive. The trained weights used by the demo (`mobilenetv2.keras`, `d1_yolov8n_best.pt`) are assets of the release `m3-demo`.
 
 ## Project scope
 
@@ -36,7 +36,7 @@ Data, trained weights and run outputs are not in the repository; the notebooks r
 5. Report classification accuracy/macro-F1 and confusion matrices; detection mAP@0.5 and mAP@0.5:0.95; and real-case recall, matched-box IoU and false positives per image.
 6. Record configurations, seeds, code revisions, dataset checksums and model artifacts with MLflow (portable JSON/CSV records as a fallback). Store per-composite generation records for sample regeneration.
 
-**Compute plan:** M1 and M2 ran on Google Colab (Tesla T4). The multi-seed detection comparison is planned for the university HPC cluster using Slurm (`hpc_m2/`), with Colab as fallback. Persist run outputs on storage appropriate to each environment. CPU deployment benchmarks name the exact machine and compare runtimes under matched conditions.
+**Compute plan:** M1 and the submitted M2 ran on Google Colab (Tesla T4); the retrained M2 ran on the Explorer cluster (Tesla P100, Slurm). The multi-seed detection comparison is planned for the university HPC cluster using Slurm (`hpc_m2/`), with Colab as fallback. Persist run outputs on storage appropriate to each environment. CPU deployment benchmarks name the exact machine and compare runtimes under matched conditions.
 
 ## Planned engineering work
 
@@ -67,14 +67,15 @@ Course deliverables take priority. If dates move, document the revised schedule;
 
 ## Results and examples
 
-Measured so far (single runs, seed 42, Colab Tesla T4):
+Measured so far (single runs, seed 42):
 
 | Task | Result |
 | --- | --- |
-| M1 classification (303 test images, 20 classes) | MobileNetV2 selected on validation: test accuracy 0.993, macro-F1 0.993 (2.28 M parameters); EfficientNet-B0 1.000, ResNet-50 0.997, custom CNN 0.891 |
-| M2 detection (300 grid-composite test images, 1,154 objects) | YOLOv8n: mAP@0.5 0.908, mAP@0.5:0.95 0.738 |
+| M1 classification (303 test images, 20 classes; Colab T4) | MobileNetV2 selected on validation: test accuracy 0.993, macro-F1 0.993 (2.28 M parameters); EfficientNet-B0 1.000, ResNet-50 0.997, custom CNN 0.891 |
+| M2 detection, submitted (Colab T4; 1,939 usable source images) | YOLOv8n on 300 grid-composite test images: mAP@0.5 0.908, mAP@0.5:0.95 0.738, macro-F1 0.890 (threshold 0.50) |
+| M2 detection, retrained (cluster P100; 1,987 usable source images after mask review) | YOLOv8n on 300 grid-composite test images (1,154 objects): mAP@0.5 0.928, mAP@0.5:0.95 0.743, macro-F1 0.900 (threshold 0.55) |
 
-The detection test set is built like the training data, so it measures in-distribution performance only. Still planned:
+The two M2 test sets were generated from different usable source images, so the two rows are not on identical test images. The detection test set is built like the training data, so it measures in-distribution performance only. Still planned:
 
 - Grid-only vs grid + copy-paste results on held-out grid and hard synthetic sets.
 - OBJ011 real-photo detections and failures, with case-study limits stated.
@@ -83,8 +84,9 @@ The detection test set is built like the training data, so it measures in-distri
 
 ## Running the project
 
-- **M1 / M2:** open the notebook in Colab with a T4 GPU, add a Drive shortcut to the course data folder, and run all cells; outputs are written to `IE7615_project/runs/` on Drive.
-- **M3 demo (local CPU):** put the trained models in `m3/models/` and follow `m3/README.md`; the demo runs at `http://127.0.0.1:7860` on the local machine.
+- **M1:** open `m1/m1_classification.ipynb` in Colab with a T4 GPU, add a Drive shortcut to the course data folder, and run all cells; outputs are written to `IE7615_project/runs/` on Drive.
+- **M2:** on the cluster, follow `hpc_m2/README.md` (Slurm job running `m2/src/m2_detection.py`); on Colab, convert the script with `m2/src/percent2ipynb.py` or use the notebook under the tag `m2-submitted`.
+- **M3 demo (local CPU):** download the two weight files from the release `m3-demo` into `m3/models/` and follow `m3/README.md`; the demo runs at `http://127.0.0.1:7860` on the local machine.
 
 Docker and API instructions will accompany those implementations. Final evaluation images will not be used as routine CI fixtures.
 
