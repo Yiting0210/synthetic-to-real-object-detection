@@ -1,0 +1,1 @@
+{"time": "2026-11-04T04:24:22.634083+00:00", "weights_sha256": "68dc75dcbb116c683c903d5914a8706dec8947dfb5cfc7eb28ddcf222960e6d1", "set": "D1-test", "reason": "M2 report: evaluate the frozen model after threshold selection on D1-val"}

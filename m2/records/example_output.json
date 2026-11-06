@@ -1,0 +1,55 @@
+{
+  "image": "d1_test_00299.jpg",
+  "objects": [
+    {
+      "object_id": "OBJ523",
+      "confidence": 0.978,
+      "box_xyxy": [
+        64.1,
+        13.8,
+        145.9,
+        157.6
+      ]
+    },
+    {
+      "object_id": "OBJ125",
+      "confidence": 0.961,
+      "box_xyxy": [
+        512.2,
+        115.0,
+        566.2,
+        145.2
+      ]
+    },
+    {
+      "object_id": "OBJ070",
+      "confidence": 0.908,
+      "box_xyxy": [
+        198.7,
+        279.5,
+        234.8,
+        404.9
+      ]
+    },
+    {
+      "object_id": "OBJ608",
+      "confidence": 0.937,
+      "box_xyxy": [
+        428.0,
+        280.8,
+        469.3,
+        363.5
+      ]
+    },
+    {
+      "object_id": "OBJ001",
+      "confidence": 0.912,
+      "box_xyxy": [
+        169.4,
+        552.0,
+        185.6,
+        583.5
+      ]
+    }
+  ]
+}
