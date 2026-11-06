@@ -35,7 +35,7 @@ if detector:
 
 # Test results reported in M1 and M2 (shown on the page; not recomputed here)
 M1_RESULT = "test accuracy 0.993"
-M2_RESULT = "D1-test mAP@0.5 0.908"
+M2_RESULT = "D1-test mAP@0.5 0.928"   # retrained detector (m2/models); the submitted M2 model had 0.908
 REPO_URL = "https://github.com/Yiting0210/synthetic-to-real-object-detection"   # header GitHub icon; inactive if empty
 
 # ---------------------------------------------------------------- icons (inline SVG, no icon library needed)
@@ -310,7 +310,7 @@ button, a, .gallery-item { transition: var(--ease); }
   background: transparent !important; color: #64748B !important; }
 .img-card .top-panel button:hover { background: #F5F3FF !important; color: #4F46E5 !important; }
 .img-card .source-selection { display: none !important; }
-.img-card .upload-container, .img-card .image-frame, .img-card .webcam, .img-card .wrap { min-height: 350px; }
+.img-card .upload-container, .img-card .image-frame, .img-card .webcam, .img-card .image-container .wrap { min-height: 350px; }   /* not the slider's .wrap */
 .img-card .upload-container { margin: 0 20px; border-radius: 14px; background: #FAFBFE; border: 1px dashed #D8DEEA; }
 .img-card .upload-container:hover { border-color: #A5B4FC; background: #F5F3FF; }
 .img-card .upload-container:has(.image-frame), .img-card .upload-container:has(.image-frame):hover { border-color: transparent; background: transparent; }
@@ -480,7 +480,8 @@ with gr.Blocks(title="Lab-to-Real Object ID", theme=theme, css=CSS, js=JS, fill_
                 m_outs = [m_out, m_card, m_table, m_json]
                 m_btn.click(run_multi, [m_in, m_conf], m_outs)
                 m_in.upload(run_multi, [m_in, m_conf], m_outs)
-                m_conf.release(run_multi, [m_in, m_conf], m_outs)
+                # any change (dragging or typing in the number box) re-runs; while dragging only the last value is computed
+                m_conf.change(run_multi, [m_in, m_conf], m_outs, trigger_mode="always_last")
                 m_in.clear(lambda: (None, EMPTY_MULTI, [], {}), None, m_outs)
                 if examples("multi"):
                     with gr.Column(elem_classes="ex-card", elem_id="m-examples"):
