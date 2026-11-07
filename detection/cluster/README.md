@@ -61,6 +61,23 @@ Check in the log: `nvidia-smi` shows a GPU, and Ultralytics prints `CUDA:0 (...)
 
 Expected time: masks 15–30 min on 8 CPUs (seconds with the cache), generation 10–20 min, training 45–70 min.
 
+## Experiments: mask fixes and training augmentation
+
+Every run also writes two things used to improve the detector (both use train/val only, never test):
+
+- **Single-object val photos** in `M2_results_for_report.md` and `selection.json`: the val split's single-object photos, where the object fills the frame. D1 has no object larger than about half the canvas, so this is the check for large objects.
+- **Suspect partial masks**: `IE7615_project/masks/mask_review_suggested.csv` and `masks/review_sheets/u2net/suspect_partial_masks.jpg` (red: current mask, yellow: suggested SAM box). Look at the sheet, delete the rows you disagree with, and append the rest to `IE7615_project/masks/mask_review.csv`.
+
+Order of runs (compare on D1-val and the single-object val photos only; D1-test is printed at the end of every run but is not used for choosing):
+
+| Run | Command | Purpose |
+|---|---|---|
+| A | `sbatch m2_job.sbatch` | Current masks; produces the suspect list |
+| B | `sbatch m2_job.sbatch` after updating `mask_review.csv` | New baseline with the fixed masks |
+| C | `M2_TRAIN_AUG=large sbatch m2_job.sbatch` | Same data as B, training augmentation for large objects (`scale=0.9`, `mosaic=0.5`) |
+
+The first `sam` decision downloads `sam_b.pt` (~375 MB) into `run/`.
+
 ## 4. Get the results back
 
 Results are in `IE7615_project/runs/m2_<time>/`, same as on Drive. Download that folder; `M2_results_for_report.md` has the tables for the report, and `demo_examples/`, `models/d1_yolov8n_best.pt`, `records/selection.json` are what the demo needs (`models/` and `demo/examples/` in the repository).

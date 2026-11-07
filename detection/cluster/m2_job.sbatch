@@ -1,6 +1,8 @@
 #!/bin/bash
 # M2 on the cluster: masks → D1 generation → YOLOv8n training → threshold on D1-val → D1-test.
 # Submit from inside this folder (uploaded to the cluster as ~/hpc_m2):   cd hpc_m2 && sbatch m2_job.sbatch
+# Training augmentation for large objects:                                 M2_TRAIN_AUG=large sbatch m2_job.sbatch
+# (sbatch passes the variable on to the job; without it the Ultralytics defaults are used)
 #SBATCH --job-name=m2_yolo
 #SBATCH --partition=courses-gpu    # Explorer: course GPU partition (the general `gpu` partition is often full)
 #SBATCH --account=ie7615.202710

@@ -95,10 +95,21 @@ NMS_IOU = 0.7                                  # Ultralytics default
 CONF_GRID = [round(0.05 * k, 2) for k in range(1, 20)]      # 0.05 … 0.95
 MATCH_IOU = 0.5
 
+# Training augmentation on top of D1. In D1 no object is larger than ~half the canvas, and mosaic shrinks objects further,
+# so large objects get low confidence. "large": random zoom 0.1–1.9× instead of 0.5–1.5×, mosaic on half of the batches.
+TRAIN_AUG_NAME = os.environ.get("M2_TRAIN_AUG", "default")
+TRAIN_AUG = {"default": {}, "large": dict(scale=0.9, mosaic=0.5)}[TRAIN_AUG_NAME]
+
+# Masks that cover only part of the object: on train/val composites the model's box (same class) is much larger
+# than the box from the mask. Thresholds: detection confidence, IoU below which the box counts as a mismatch,
+# predicted/mask box area ratio, share of the mask box inside the predicted box, minimum number of such composites.
+SUSPECT = dict(conf=0.25, max_iou=0.6, area_ratio=1.5, gt_inside=0.8, min_hits=2)
+
 if SMOKE:
     SET_SIZES = dict(train=40, val=12, test=12)
     EPOCHS, PATIENCE, BATCH = 1, 1, 8
     FLOORS = dict(train=(1, 1), val=(1, 1), test=(1, 1))
+    SUSPECT = dict(SUSPECT, conf=0.001, min_hits=1)
 
 # %%
 if IN_COLAB:
@@ -130,7 +141,7 @@ for p, what in [(DATA_DIR, "shared data folder"), (M1_RUN_DIR, "M1 run folder")]
     if not p.exists():
         raise FileNotFoundError(f"{what} not found: {p}")
 
-RUN_TAG = datetime.now().strftime("m2_%Y%m%d_%H%M%S") + ("_smoke" if SMOKE else "")
+RUN_TAG = datetime.now().strftime("m2_%Y%m%d_%H%M%S") + (f"_{TRAIN_AUG_NAME}aug" if TRAIN_AUG else "") + ("_smoke" if SMOKE else "")
 OUT_DIR = OUT_ROOT / RUN_TAG
 for sub in ["data", "models", "figures", "records"]:
     (OUT_DIR / sub).mkdir(parents=True, exist_ok=True)
@@ -637,7 +648,7 @@ print("Dataset manifests sha256:", {s: v[:12] for s, v in DS_SHA.items()})
 
 # %% [markdown]
 # # Task6 - Fine-tune YOLOv8n on D1-train
-# Transfer learning from COCO-pretrained YOLOv8n (the 80-class head is replaced by a 20-class head). Image size 640, batch 16, up to 100 epochs, early stopping (patience 20) on D1-val, Ultralytics' default augmentation including mosaic.
+# Transfer learning from COCO-pretrained YOLOv8n (the 80-class head is replaced by a 20-class head). Image size 640, batch 16, up to 100 epochs, early stopping (patience 20) on D1-val, Ultralytics' default augmentation including mosaic. With `M2_TRAIN_AUG=large`, the random zoom range is widened and mosaic is used on half of the batches (`TRAIN_AUG`, Task1); the data stay the same.
 #
 # Checkpoint selection: Ultralytics keeps `best.pt` by its fitness on D1-val, `0.1·mAP@0.5 + 0.9·mAP@0.5:0.95`. The proposal's M2 rule is mAP@0.5:0.95 on D1-val alone; the cell after training prints whether the two rules pick the same epoch.
 
@@ -645,8 +656,9 @@ print("Dataset manifests sha256:", {s: v[:12] for s, v in DS_SHA.items()})
 t0 = time.time()
 model = YOLO(YOLO_WEIGHTS)
 model.train(data=str(data_yaml), epochs=EPOCHS, patience=PATIENCE, imgsz=IMGSZ, batch=BATCH, seed=SEED, deterministic=True,
-            device=DEVICE, workers=2, project=str(WORK_DIR / "yolo"), name="d1_yolov8n", exist_ok=True, verbose=False)
+            device=DEVICE, workers=2, project=str(WORK_DIR / "yolo"), name="d1_yolov8n", exist_ok=True, verbose=False, **TRAIN_AUG)
 TRAIN_MIN = (time.time() - t0) / 60
+print(f"Training augmentation: {TRAIN_AUG_NAME} {TRAIN_AUG or '(Ultralytics defaults)'}")
 RUN = Path(model.trainer.save_dir)
 BEST = OUT_DIR / "models" / "d1_yolov8n_best.pt"
 shutil.copy2(RUN / "weights" / "best.pt", BEST)
@@ -756,14 +768,115 @@ plt.tight_layout(); plt.savefig(OUT_DIR / "figures" / "threshold_sweep_val.png",
 
 val_m = best_model.val(data=str(data_yaml), split="val", imgsz=IMGSZ, batch=BATCH, conf=0.001, iou=NMS_IOU, device=DEVICE,
                        plots=False, verbose=False, project=str(WORK_DIR / "yolo"), name="val", exist_ok=True)
-VAL = dict(map50=float(val_m.box.map50), map50_95=float(val_m.box.map), at_threshold=best_t)
-selection = dict(model="YOLOv8n fine-tuned on D1-train", weights_sha256=BEST_SHA, best_epoch=BEST_EPOCH, epochs_run=EPOCHS_RUN,
+
+def single_object_eval(split, conf):
+    """Single-object source photos (224×224, the object fills most of the frame) through the detector: is the top box the true class?
+    D1 has no object larger than about half the canvas, so this measures how the detector copes with large objects."""
+    rows = [r for r in sources if r["split"] == split]
+    hit = miss = 0
+    for k in range(0, len(rows), 32):
+        batch = rows[k:k + 32]
+        for r, res in zip(batch, best_model.predict([str(SRC_DIR / r["local_path"]) for r in batch], conf=conf, iou=NMS_IOU,
+                                                    imgsz=IMGSZ, device=DEVICE, verbose=False)):
+            if len(res.boxes) == 0:
+                miss += 1
+            elif CLASSES[int(res.boxes.cls[res.boxes.conf.argmax()])] == r["class_id"]:
+                hit += 1
+    return dict(n=len(rows), top1_correct=hit, no_detection=miss, top1_acc=hit / max(len(rows), 1))
+
+SINGLE_VAL = single_object_eval("val", GEN_THR)
+VAL = dict(map50=float(val_m.box.map50), map50_95=float(val_m.box.map), at_threshold=best_t, single_object=SINGLE_VAL)
+selection = dict(model="YOLOv8n fine-tuned on D1-train", train_aug=TRAIN_AUG_NAME, weights_sha256=BEST_SHA, best_epoch=BEST_EPOCH, epochs_run=EPOCHS_RUN,
                  checkpoint_rule="Ultralytics best.pt (fitness 0.1·mAP50 + 0.9·mAP50-95 on D1-val)",
                  general_threshold=GEN_THR, threshold_rule="max macro-F1 over 20 classes on D1-val; grid 0.05–0.95; ties → higher",
                  nms_iou=NMS_IOU, decided_at=datetime.now(timezone.utc).isoformat(), val=VAL)
 (OUT_DIR / "records" / "selection.json").write_text(json.dumps(selection, indent=2), encoding="utf-8")
 print(f"D1-val: mAP@0.5 {VAL['map50']:.4f}, mAP@0.5:0.95 {VAL['map50_95']:.4f}")
 print(f"General threshold = {GEN_THR} → precision {best_t['precision']:.4f}, recall {best_t['recall']:.4f}, macro-F1 {best_t['macro_f1']:.4f} (saved before test)")
+print(f"Single-object val photos ({SINGLE_VAL['n']}): top-1 class correct {SINGLE_VAL['top1_correct']} ({SINGLE_VAL['top1_acc']:.4f}), "
+      f"no detection {SINGLE_VAL['no_detection']}")
+
+# %% [markdown]
+# # Task7b - Masks that may cover only part of the object (train and val only)
+# Some masks miss part of the object (e.g. a stand or a handle), so the box from the mask is too small and a correct detection is scored as "wrong location". To find them without browsing all 2,000 masks, the model predicts on the **train and val composites** (never on test): if, for the same class, its box is much larger than the mask box and contains it, the mask is suspect. A source photo is listed when this happens in at least `min_hits` composites and in at least half of the composites that use it. The predicted box is mapped back onto the 224×224 source photo and written as a suggested SAM box.
+#
+# Output: `masks/mask_review_suggested.csv` (same columns as `mask_review.csv`, action `sam`) and the sheet `masks/review_sheets/<model>/suspect_partial_masks.jpg` (red: current mask, yellow: suggested box). Check the sheet, delete the rows you disagree with, add the rest to `mask_review.csv`, and run again.
+
+# %%
+def to_source_box(rec, o, box):
+    """Map a box on the composite back onto the source photo of object o: the inverse of render() (position, resize, rotation, flip)."""
+    h, w = masks[o["source"]].shape
+    rw, rh = Image.new("L", (w, h)).rotate(o["angle"], expand=True).size   # size after rotation, as in render()
+    rows, cols = rec["grid"]
+    cw, ch = CANVAS / cols, CANVAS / rows
+    fit = min(cw / rw, ch / rh) * o["scale"]
+    nw, nh = max(1, round(rw * fit)), max(1, round(rh * fit))
+    r_, c_ = o["cell"]
+    x0 = int(c_ * cw + (cw - nw) * o["pos"][0])
+    y0 = int(r_ * ch + (ch - nh) * o["pos"][1])
+    t = math.radians(o["angle"]); cs, sn = math.cos(t), math.sin(t)
+    pts = []
+    for X, Y in [(box[0], box[1]), (box[2], box[1]), (box[0], box[3]), (box[2], box[3])]:
+        du = (X - x0) * rw / nw - rw / 2                  # offset from the centre of the rotated tile
+        dv = (Y - y0) * rh / nh - rh / 2
+        x = cs * du - sn * dv + w / 2                      # undo PIL's counter-clockwise rotation
+        y = sn * du + cs * dv + h / 2
+        pts.append((w - x if o["flip"] else x, y))         # undo the horizontal flip
+    xs, ys = zip(*pts)
+    return [int(max(0, min(xs))), int(max(0, min(ys))), int(min(w, math.ceil(max(xs)))), int(min(h, math.ceil(max(ys))))]
+
+rec_by_id = {r["image_id"]: r for s in ("train", "val") for r in d1_records[s]}
+train_preds, train_gts = predict_split("train", conf=SUSPECT["conf"])
+hits, seen, sugg = {}, {}, {}
+for preds, gts in [(train_preds, train_gts), (val_preds, val_gts)]:
+    for img, ps in preds.items():
+        rec = rec_by_id[img]
+        assert len(rec["objects"]) == len(gts[img]), img
+        for o, (c, g) in zip(rec["objects"], gts[img]):
+            src = o["source"]
+            seen[src] = seen.get(src, 0) + 1
+            cand = [b for cc, s, b in ps if cc == c and s >= SUSPECT["conf"]]
+            if not cand:
+                continue
+            b = max(cand, key=lambda b: iou(b, g))
+            g_area, b_area = (g[2] - g[0]) * (g[3] - g[1]), (b[2] - b[0]) * (b[3] - b[1])
+            inside = max(0, min(b[2], g[2]) - max(b[0], g[0])) * max(0, min(b[3], g[3]) - max(b[1], g[1])) / g_area
+            if 0.1 <= iou(b, g) < SUSPECT["max_iou"] and b_area / g_area >= SUSPECT["area_ratio"] and inside >= SUSPECT["gt_inside"]:
+                hits[src] = hits.get(src, 0) + 1
+                sugg.setdefault(src, []).append(to_source_box(rec, o, b))
+suspects = sorted((s for s in hits if hits[s] >= SUSPECT["min_hits"] and hits[s] / seen[s] >= 0.5),
+                  key=lambda s: (SRC[s]["class_id"], s))
+
+sugg_path = MASK_DIR / "mask_review_suggested.csv"
+with open(sugg_path, "w", newline="", encoding="utf-8") as f:
+    w = csv.writer(f); w.writerow(["image_id", "action", "box", "note"])
+    for s in suspects:
+        box = [int(v) for v in np.median(np.array(sugg[s]), axis=0)]
+        prev = review.get(s, {}).get("action", "")
+        w.writerow([s, "sam", " ".join(map(str, box)),
+                    f"box too small in {hits[s]}/{seen[s]} composites" + (f"; already reviewed: {prev}" if prev else "")])
+shutil.copy2(sugg_path, OUT_DIR / "records" / "mask_review_suggested.csv")
+by_class = {}
+for s in suspects:
+    by_class[SRC[s]["class_id"]] = by_class.get(SRC[s]["class_id"], 0) + 1
+print(f"Suspect partial masks: {len(suspects)} source photos (train/val composites only) → {sugg_path}")
+print("By class:", dict(sorted(by_class.items(), key=lambda kv: -kv[1])) or "none")
+
+if suspects:
+    size = 150
+    with open(sugg_path, encoding="utf-8") as f:
+        boxes = {row["image_id"]: [int(v) for v in row["box"].split()] for row in csv.DictReader(f)}
+    sheet = make_sheet(suspects[:100], size=size)
+    d = ImageDraw.Draw(sheet)
+    for k, s in enumerate(suspects[:100]):
+        h, w_ = masks[s].shape
+        x0, y0, x1, y1 = boxes[s]
+        ox, oy = (k % 10) * size, (k // 10) * size
+        d.rectangle([ox + x0 * size / w_, oy + y0 * size / h, ox + x1 * size / w_, oy + y1 * size / h], outline=(255, 255, 0), width=2)
+    sheet.save(SHEET_DIR / "suspect_partial_masks.jpg", quality=85)
+    sheet.save(OUT_DIR / "figures" / "suspect_partial_masks.jpg", quality=85)
+    plt.figure(figsize=(15, 1.6 * math.ceil(min(len(suspects), 100) / 10)))
+    plt.imshow(sheet); plt.axis("off"); plt.title("Suspect partial masks (red: current mask, yellow: suggested SAM box)"); plt.show()
 
 # %% [markdown]
 # # Task8 - Evaluate on D1-test
@@ -797,18 +910,9 @@ print("Most frequent wrong-class pairs (true → predicted : count):", TEST_T["c
 
 # %%
 # Single-object images through the detector (source test split, 224×224): top box vs true class
-single = [r for r in sources if r["split"] == "test"]
-hit = miss = 0
-for k in range(0, len(single), 32):
-    batch = single[k:k + 32]
-    for r, res in zip(batch, best_model.predict([str(SRC_DIR / r["local_path"]) for r in batch], conf=GEN_THR, iou=NMS_IOU,
-                                                imgsz=IMGSZ, device=DEVICE, verbose=False)):
-        if len(res.boxes) == 0:
-            miss += 1
-        elif CLASSES[int(res.boxes.cls[res.boxes.conf.argmax()])] == r["class_id"]:
-            hit += 1
-SINGLE = dict(n=len(single), top1_correct=hit, no_detection=miss, top1_acc=hit / max(len(single), 1))
-print(f"Single-object test images ({len(single)}): top-1 class correct {hit} ({SINGLE['top1_acc']:.4f}), no detection {miss}")
+SINGLE = single_object_eval("test", GEN_THR)
+print(f"Single-object test images ({SINGLE['n']}): top-1 class correct {SINGLE['top1_correct']} ({SINGLE['top1_acc']:.4f}), "
+      f"no detection {SINGLE['no_detection']}")
 
 # %%
 # Ground truth (green) vs predictions (red) on test composites, worst images first
@@ -878,12 +982,13 @@ env = dict(python=platform.python_version(), torch=torch.__version__, ultralytic
            numpy=np.__version__, pillow=Image.__version__, opencv=cv2.__version__, platform=platform.platform(), gpu=GPU_INFO, colab=IN_COLAB)
 config = dict(seed=SEED, canvas=CANVAS, grids=GRIDS, objects_per_image=N_OBJ, set_sizes=SET_SIZES, tile_aug=AUG, min_visibility=MIN_VIS,
               min_box_side=MIN_SIDE, max_tries=MAX_TRIES, rembg_model=REMBG_MODEL, mask_qc=MASK_QC, unreviewed_flagged=UNREVIEWED_FLAGGED,
-              yolo_weights=YOLO_WEIGHTS, epochs=EPOCHS, patience=PATIENCE, batch=BATCH, imgsz=IMGSZ, nms_iou=NMS_IOU, smoke=SMOKE)
+              yolo_weights=YOLO_WEIGHTS, epochs=EPOCHS, patience=PATIENCE, batch=BATCH, imgsz=IMGSZ, nms_iou=NMS_IOU,
+              train_aug=dict(name=TRAIN_AUG_NAME, overrides=TRAIN_AUG), suspect_masks=SUSPECT, smoke=SMOKE)
 rec = dict(run_id=uuid.uuid4().hex, run_tag=RUN_TAG, task="M2 multi-object detection", model="yolov8n", arm="D1-only",
            git_commit=commit, git_dirty=dirty, config=config,
            data=dict(classes_json_sha256=CLASSES_SHA, split_manifest_sha256=MANIFEST_SHA, masks_manifest_sha256=MASKS_SHA,
                      d1_manifest_sha256=DS_SHA, usable_sources=len(SRC) - len(excl), excluded_sources=len(excl),
-                     mask_reviews=len(review), generation_skips=gen_skips, regeneration_spot_check=f"{spot_ok}/{len(spot)}"),
+                     mask_reviews=len(review), suspect_partial_masks=len(suspects), generation_skips=gen_skips, regeneration_spot_check=f"{spot_ok}/{len(spot)}"),
            training=dict(minutes=TRAIN_MIN, epochs_run=EPOCHS_RUN, best_epoch=BEST_EPOCH, best_epoch_by_map50_95=BEST_EPOCH_MAP, gpu=GPU_INFO),
            selection=selection, validation_metrics=VAL, final_test_metrics=dict(d1_test=TEST, single_object_test=SINGLE),
            environment=env, artifact=dict(path="models/d1_yolov8n_best.pt", sha256=BEST_SHA))
@@ -896,8 +1001,13 @@ data_md = md_table(["set", "source split", "images", "objects", "objects / image
     f"flagged by the automatic checks: {len(flagged)}; manual review decisions: {len(review)}.\n\n{avail_md}\n\n"
     f"## Generated data\n\n{data_md}\n\n### Instances per class\n\n{inst_md}\n\n"
     f"Regeneration spot check: {spot_ok}/{len(spot)} identical.\n\n"
-    f"## Training\n\nYOLOv8n (COCO-pretrained), {EPOCHS_RUN} epochs (best {BEST_EPOCH}), {TRAIN_MIN:.1f} min on {GPU_INFO}.\n\n"
-    f"## Detection results\n\n{det_md}\n\nGeneral threshold {GEN_THR} chosen on D1-val.\n\n### Per-class (D1-test)\n\n{pc_md}\n\n"
+    f"## Training\n\nYOLOv8n (COCO-pretrained), {EPOCHS_RUN} epochs (best {BEST_EPOCH}), {TRAIN_MIN:.1f} min on {GPU_INFO}; "
+    f"training augmentation: {TRAIN_AUG_NAME} {TRAIN_AUG or '(Ultralytics defaults)'}.\n\n"
+    f"## Detection results\n\n{det_md}\n\nGeneral threshold {GEN_THR} chosen on D1-val.\n\n"
+    f"Single-object val photos (large objects, validation): {SINGLE_VAL['top1_correct']}/{SINGLE_VAL['n']} correct, "
+    f"{SINGLE_VAL['no_detection']} without detection.\n\n"
+    f"Suspect partial masks found on train/val composites: {len(suspects)} (see records/mask_review_suggested.csv).\n\n"
+    f"### Per-class (D1-test)\n\n{pc_md}\n\n"
     f"### Error types (D1-test)\n\n{err_md}\n\nWrong-class pairs: {TEST_T['confusions'][:5]}\n\n"
     f"Single-object test images through the detector: {SINGLE['top1_correct']}/{SINGLE['n']} correct, {SINGLE['no_detection']} without detection.\n\n"
     f"## Issues\n\n" + "\n".join(f"- {s}" for s in issues) + f"\n\nGit commit: {commit}\n", encoding="utf-8")
