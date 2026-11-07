@@ -4,7 +4,7 @@
 
 Can YOLOv8 trained on synthetic composites generalize to real photographs with clutter, occlusion, and scale changes?
 
-This project compares grid concatenation with mask-based copy-paste training data, evaluates synthetic-to-real generalization, and adds ML-specific engineering: experiment tracking, a model registry with rollback, and CI that checks the real exported model. A separate Keras/TensorFlow benchmark supports single-object classification.
+This project compares grid concatenation with mask-based copy-paste training data, evaluates synthetic-to-real generalization, and adds ML-specific engineering: experiment tracking and a model registry with rollback. A separate Keras/TensorFlow benchmark supports single-object classification.
 
 > **Status (November 6, 2026):** course milestones M1–M3 are done — classifier comparison, grid-concatenated detection data with YOLOv8n, and a local demo. After the M2 submission, the detector was retrained on the university cluster with reviewed masks (same code). The copy-paste comparison, real-photo evaluation, runtime benchmarks and the engineering work below are still planned.
 
@@ -55,13 +55,12 @@ The tag `detection-v1.0` also holds the executed Colab notebook, report and figu
 
 ## Planned engineering work
 
-The engineering scope is limited to ML-specific practices; general software CI/CD, data pipelines, monitoring and load testing are not part of this project.
+The engineering scope is limited to ML-specific practices; data pipelines, monitoring and load testing are not part of this project.
 
 | Area | Implementation | Evidence to publish |
 | --- | --- | --- |
 | Experiment tracking | MLflow with a local SQLite backend; Colab and HPC run records (JSON/CSV) imported by script | Every reported number traces to a run with its code commit, configuration, data checksums and model |
 | Model registry and rollback | MLflow Model Registry; `champion` / `previous` aliases; exported model bundles with checksums | A recorded rollback to the previous version, confirmed through the service response |
-| Model-aware CI | GitHub Actions running checks on a pinned, exported detector: class map, letterbox coordinates, ONNX vs PyTorch outputs, known-object detection | CI run history on every push |
 | Minimal inference service | FastAPI `POST /detect` (then `/classify`), Docker image with the model bundle mounted read-only, pytest | Tested API calls that report the model version |
 | Detector CPU inference | PyTorch FP32, ONNX Runtime FP32, OpenVINO FP32/INT8 | Accuracy, mean/p95 latency, memory, artifact size and load time under matched conditions |
 
@@ -75,8 +74,8 @@ The four-runtime benchmark applies to the detector. The classifier's native corr
 | M2 · Oct 27 | Synthetic multi-object dataset, YOLOv8 training and ID/location outputs |
 | M3 · Nov 3 | Completed detection model and live single/multi-object demonstration |
 | M4 · Nov 10 | Final report and models; then detector runtime comparison (at least PyTorch FP32 vs OpenVINO INT8) |
-| Nov 11–24 | Remaining runtime measurements, FastAPI + Docker, model-aware CI, MLflow import and Model Registry with a rollback demonstration, README results linked to runs |
-| December (optional) | Open-set rejection, webcam demo, and a single-object data-drift case study |
+| Nov 11–24 | Remaining runtime measurements, FastAPI + Docker, MLflow import and Model Registry with a rollback demonstration, README results linked to runs |
+| December (optional) | Webcam demo and a single-object data-drift case study |
 
 Course deliverables take priority. If dates move, document the revised schedule; do not present pending features as completed.
 
@@ -95,7 +94,14 @@ The two M2 test sets were generated from different usable source images, so the 
 - Grid-only vs grid + copy-paste results on held-out grid and hard synthetic sets.
 - OBJ011 real-photo detections and failures, with case-study limits stated.
 - Detector FP32/INT8 accuracy, latency and resource tables with measurement conditions.
-- MLflow-tracked runs, a Model Registry rollback demonstration, and CI history of the real-model checks.
+- MLflow-tracked runs and a Model Registry rollback demonstration.
+
+### M1 conclusions (single-object classification)
+
+1. **Transfer learning is what matters; the three pretrained models are tied.** The from-scratch CNN reaches 0.891 test accuracy, every ImageNet-pretrained model 0.993–1.000. On validation (303 images) ResNet-50, EfficientNet-B0 and MobileNetV2 lie within each other's 95% Wilson intervals, so the difference between them is not measurable at this sample size. MobileNetV2 was chosen by the rule fixed before testing (fewest parameters among the competitive models): 2.28 M parameters, 10× fewer than ResNet-50, test accuracy 0.993 with 2 errors in 303 (OBJ123→OBJ777, OBJ004→OBJ007).
+2. **The accuracy is in-distribution.** Each class was photographed by one person in one setting, and some classes carry framing cues (borders, plain backgrounds). The grouped split removes near-duplicate leakage, but test images still come from the same sessions as training, so ~99% does not mean the model works on new photos of these objects.
+3. **The 20-class model cannot say "none of these".** It always returns one of the 20 IDs. Adding an `OTHERS` class (100 photos of 31 everyday kinds; same recipe) keeps known accuracy (302/303 on test) and rejects 12 of 15 OTHERS test photos, but only 15 of 36 photos of 18 kinds never seen in training. A confidence threshold chosen on validation (T = 0.50) raises this to 21/36 at the cost of 1 more known image rejected; this is what the demo uses.
+4. **The rejection rule matters less than the training data.** Five rules were compared, the threshold of each set on validation (at most 1% of known images rejected): softmax threshold or class-prototype (cosine) distance on the 20-class model, and `OTHERS` alone, `OTHERS` + softmax threshold, `OTHERS` + prototype distance on the 21-class model. They reject 15–25 of 36 unseen photos with AUROC 0.980–0.991 and overlapping intervals; `OTHERS` alone is the weakest, `OTHERS` + prototype distance the best (25/36). Objects that look like a course object (e.g. sunglasses) are accepted by all five, so the next improvement would come from look-alike negative examples, not another decision rule. The unseen set was used to compare the rules, so the best number is optimistic; an unbiased figure needs a fresh unseen set. Details: `classification/results_openset/`.
 
 ## Running the project
 
@@ -103,7 +109,7 @@ The two M2 test sets were generated from different usable source images, so the 
 - **Detection (M2):** on the cluster, follow `detection/cluster/README.md` (Slurm job running `detection/src/m2_detection.py`); on Colab, convert the script with `detection/src/percent2ipynb.py` or use the notebook under the tag `detection-v1.0`.
 - **Demo (M3, local CPU):** put the two weight files into `models/` and follow `demo/README.md`; the demo runs at `http://127.0.0.1:7860` on the local machine.
 
-Docker and API instructions will accompany those implementations. Final evaluation images will not be used as routine CI fixtures.
+Docker and API instructions will accompany those implementations.
 
 ## References
 
