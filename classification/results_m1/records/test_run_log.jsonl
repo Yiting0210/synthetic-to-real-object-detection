@@ -1,0 +1,2 @@
+{"time": "2026-10-18T04:45:03.910058+00:00", "models": ["custom_cnn", "mobilenetv2", "resnet50", "efficientnetb0"], "selected": "efficientnetb0", "reason": "M1 report: evaluate all candidates after the validation-based selection"}
+{"time": "2026-10-18T05:57:58.468679+00:00", "models": ["custom_cnn", "mobilenetv2", "resnet50", "efficientnetb0"], "selected": "mobilenetv2", "reason": "M1 report: evaluate all candidates after the validation-based selection"}

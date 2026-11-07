@@ -1,0 +1,113 @@
+{
+  "run_id": "fcfb3b57e3db4e3c88805ae15fb8e620",
+  "run_tag": "m1_20261018_022316",
+  "task": "M1 single-object classification",
+  "model": "efficientnetb0",
+  "git_commit": "not recorded",
+  "git_dirty": null,
+  "config": {
+    "seed": 42,
+    "split_ratios": [
+      0.7,
+      0.15,
+      0.15
+    ],
+    "img_size": 224,
+    "batch": 32,
+    "phash_threshold": 4,
+    "epochs": {
+      "cnn": 60,
+      "head": 10,
+      "finetune": 20
+    },
+    "patience": {
+      "cnn": 10,
+      "finetune": 5
+    },
+    "lr": {
+      "cnn": 0.001,
+      "head": 0.001,
+      "finetune": 0.0001
+    },
+    "weight_decay": 0.0001,
+    "optimizer": "AdamW + CosineDecay",
+    "augmentation": [
+      "flip_h",
+      "rotate\u00b115\u00b0",
+      "zoom_in\u226420%",
+      "translate\u00b110%",
+      "contrast\u00b120%",
+      "brightness\u00b120%",
+      "random_erase p=0.5"
+    ],
+    "pretrained_weights": "imagenet",
+    "smoke": false,
+    "max_per_class": null
+  },
+  "data": {
+    "split_manifest_sha256": "ce9172b7092e48fa8e935b71fb36be91d74fe93e288c651a1cb66244f91b99ac",
+    "classes_json_sha256": "511d30a18ee81bfad831d0d2cd189ebb359a8d94b8df883b64e358a3ab35b43a",
+    "n_images": 2022,
+    "n_per_split": {
+      "train": 1416,
+      "val": 303,
+      "test": 303
+    }
+  },
+  "selection_rule": "Assignment 1 rule: models whose val accuracy is within the 95% Wilson CI of the best are competitive; among them choose the fewest parameters, then the shortest training time",
+  "chosen_stage": "finetune",
+  "epochs_run": {
+    "head": 10,
+    "finetune": 7
+  },
+  "params_total": 4075191,
+  "params_trainable_final": 3155504,
+  "validation_metrics": {
+    "accuracy": 1.0,
+    "macro_f1": 1.0
+  },
+  "final_test_metrics": {
+    "accuracy": 1.0,
+    "macro_f1": 1.0,
+    "per_class_f1": {
+      "OBJ000": 1.0,
+      "OBJ001": 1.0,
+      "OBJ002": 1.0,
+      "OBJ004": 1.0,
+      "OBJ006": 1.0,
+      "OBJ007": 1.0,
+      "OBJ011": 1.0,
+      "OBJ070": 1.0,
+      "OBJ108": 1.0,
+      "OBJ111": 1.0,
+      "OBJ123": 1.0,
+      "OBJ125": 1.0,
+      "OBJ201": 1.0,
+      "OBJ222": 1.0,
+      "OBJ523": 1.0,
+      "OBJ529": 1.0,
+      "OBJ608": 1.0,
+      "OBJ666": 1.0,
+      "OBJ777": 1.0,
+      "OBJ916": 1.0
+    }
+  },
+  "train_minutes": 7.44,
+  "environment": {
+    "python": "3.13.15",
+    "tensorflow": "2.21.0",
+    "keras": "3.13.2",
+    "numpy": "2.1.3",
+    "platform": "Linux-6.6.122+-x86_64-with-glibc2.39",
+    "gpu": [
+      "Tesla T4"
+    ],
+    "cpu": "Intel(R) Xeon(R) CPU @ 2.00GHz",
+    "colab": true
+  },
+  "artifact": {
+    "path": "models/efficientnetb0.keras",
+    "sha256": "a9e7d9e12cf938b52c7c2ac9a3f8cf8d8217b741118fe316e4e7efeaa6f57b03"
+  },
+  "selected_as_best": false
+}
