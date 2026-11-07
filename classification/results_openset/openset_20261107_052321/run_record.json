@@ -1,0 +1,112 @@
+{
+  "run": "openset_20261107_052321",
+  "time": "2026-11-07T13:25:05.308593+00:00",
+  "git_commit": "500fb40",
+  "rule": "threshold per method = largest value rejecting at most 1% of the val course images",
+  "models": {
+    "mobilenetv2.keras": "33d264a42df8",
+    "mobilenetv2_others.keras": "9deb20818f4c"
+  },
+  "data": {
+    "split_manifest": "ce9172b7",
+    "n": {
+      "train": 1416,
+      "val": 303,
+      "test": 303,
+      "others_test": 15,
+      "unseen": 36
+    }
+  },
+  "results": {
+    "A": {
+      "label": "V1 + softmax threshold",
+      "model": "V1",
+      "threshold": 0.759,
+      "val_false_rejection": 3,
+      "test_known_correct": 300,
+      "test_false_rejection": 2,
+      "others_test_rejected": 12,
+      "unseen_rejected": 23,
+      "auroc": 0.9844,
+      "auroc_ci": [
+        0.9711,
+        0.9947
+      ]
+    },
+    "B": {
+      "label": "V1 + prototype distance",
+      "model": "V1",
+      "threshold": 0.7066,
+      "val_false_rejection": 3,
+      "test_known_correct": 300,
+      "test_false_rejection": 1,
+      "others_test_rejected": 15,
+      "unseen_rejected": 24,
+      "auroc": 0.9874,
+      "auroc_ci": [
+        0.9747,
+        0.9966
+      ]
+    },
+    "C": {
+      "label": "V2 OTHERS class only",
+      "model": "V2",
+      "threshold": null,
+      "val_false_rejection": 0,
+      "test_known_correct": 302,
+      "test_false_rejection": 1,
+      "others_test_rejected": 12,
+      "unseen_rejected": 15,
+      "auroc": 0.9795,
+      "auroc_ci": [
+        0.9545,
+        0.9954
+      ]
+    },
+    "D": {
+      "label": "V2 OTHERS + softmax threshold",
+      "model": "V2",
+      "threshold": 0.508,
+      "val_false_rejection": 3,
+      "test_known_correct": 301,
+      "test_false_rejection": 2,
+      "others_test_rejected": 13,
+      "unseen_rejected": 21,
+      "auroc": 0.9851,
+      "auroc_ci": [
+        0.9735,
+        0.9946
+      ]
+    },
+    "E": {
+      "label": "V2 OTHERS + prototype distance",
+      "model": "V2",
+      "threshold": 0.6946,
+      "val_false_rejection": 3,
+      "test_known_correct": 301,
+      "test_false_rejection": 2,
+      "others_test_rejected": 14,
+      "unseen_rejected": 25,
+      "auroc": 0.9909,
+      "auroc_ci": [
+        0.9807,
+        0.9979
+      ]
+    },
+    "D*": {
+      "label": "V2 OTHERS + softmax threshold (deployed T = 0.50)",
+      "model": "V2",
+      "threshold": 0.5,
+      "val_false_rejection": 3,
+      "test_known_correct": 301,
+      "test_false_rejection": 2,
+      "others_test_rejected": 13,
+      "unseen_rejected": 21,
+      "auroc": 0.9851,
+      "auroc_ci": [
+        0.9735,
+        0.9946
+      ]
+    }
+  }
+}
