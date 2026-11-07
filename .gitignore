@@ -39,3 +39,9 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 .DS_Store
+
+# Own photos for the "others" class (kept locally and on Drive, not in git)
+classification/others/
+
+# Cache of the course images for the OTHERS training (upload to Drive IE7615_project/cache/, not git)
+detection/cluster/IE7615_project/cache/

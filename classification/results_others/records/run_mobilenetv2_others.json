@@ -1,0 +1,264 @@
+{
+  "run_id": "82bb8c638bd14bb58b09220c4eebcb12",
+  "run_tag": "m1o_20261107_113839",
+  "task": "M1 extension: MobileNetV2 with an OTHERS class",
+  "smoke": false,
+  "data": {
+    "m1_run": "m1_20261018_022316",
+    "classes_json_sha256": "511d30a18ee81bfad831d0d2cd189ebb359a8d94b8df883b64e358a3ab35b43a",
+    "split_manifest_sha256": "ce9172b7092e48fa8e935b71fb36be91d74fe93e288c651a1cb66244f91b99ac",
+    "classes_with_others_sha256": "83d20a4833d5a36c84eaf3649e72690f26ab7b11cef7575c3d96dc78a0cabe71",
+    "n_course_images": 2022,
+    "n_others": 100,
+    "course_images_from": "cache zip (md5-checked)",
+    "others_from": "zip others.zip",
+    "others_split": {
+      "train": 70,
+      "val": 15,
+      "test": 15
+    },
+    "n_unseen": 36,
+    "others_kinds": {
+      "alarm_clock": 4,
+      "backpack": 3,
+      "binoculars": 3,
+      "butterfly": 4,
+      "calculator": 3,
+      "camera": 4,
+      "chicken": 3,
+      "computer_mouse": 4,
+      "deer": 4,
+      "empty": 5,
+      "fire_hydrant": 3,
+      "football": 3,
+      "frog": 3,
+      "guitar": 3,
+      "houseplant": 3,
+      "kite": 3,
+      "laptop": 3,
+      "microphone": 3,
+      "mixing_bowl": 3,
+      "mobile_phone": 3,
+      "mushroom": 3,
+      "pig": 3,
+      "pillow": 3,
+      "rabbit": 3,
+      "remote_control": 3,
+      "rose": 3,
+      "scissors": 3,
+      "spoon": 3,
+      "traffic_light": 3,
+      "umbrella": 3,
+      "watch": 3
+    },
+    "unseen_kinds": {
+      "candle": 2,
+      "desk_lamp": 2,
+      "dice": 2,
+      "electric_kettle": 2,
+      "glove": 2,
+      "hat": 2,
+      "headphones": 2,
+      "pen": 2,
+      "power_outlet": 2,
+      "sock": 2,
+      "stapler": 2,
+      "sunglasses": 2,
+      "tissue_box": 2,
+      "toaster": 2,
+      "toothbrush": 2,
+      "towel": 2,
+      "toy_car": 2,
+      "wallet": 2
+    }
+  },
+  "config": {
+    "seed": 42,
+    "img_size": 224,
+    "batch": 32,
+    "epochs": {
+      "head": 10,
+      "finetune": 20
+    },
+    "patience": {
+      "finetune": 5
+    },
+    "lr": {
+      "head": 0.001,
+      "finetune": 0.0001
+    },
+    "weight_decay": 0.0001,
+    "unfreeze_from": "block_13_expand",
+    "pretrained": "imagenet",
+    "others_preprocessing": "EXIF upright, central square crop, 224x224 JPEG"
+  },
+  "chosen_stage": "finetune",
+  "train_minutes": 11.75,
+  "params": 2284885,
+  "validation": {
+    "accuracy_21": {
+      "value": 0.9874213836477987,
+      "k": 314,
+      "n": 318,
+      "ci": [
+        0.9681088221316358,
+        0.9950979230498447
+      ]
+    },
+    "known_accuracy": {
+      "value": 0.9933993399339934,
+      "k": 301,
+      "n": 303,
+      "ci": [
+        0.9762561145559292,
+        0.9981880286110991
+      ]
+    },
+    "false_rejection": {
+      "value": 0.0,
+      "k": 0,
+      "n": 303,
+      "ci": [
+        0.0,
+        0.012519814783914566
+      ]
+    },
+    "others_recall": {
+      "value": 0.8666666666666667,
+      "k": 13,
+      "n": 15,
+      "ci": [
+        0.6211750079348376,
+        0.9626395301086407
+      ]
+    },
+    "others_precision": {
+      "value": 1.0,
+      "k": 13,
+      "n": 13,
+      "ci": [
+        0.7718981569447083,
+        1.0
+      ]
+    },
+    "per_class_f1": [
+      1.0,
+      0.9375,
+      1.0,
+      0.9655172413793104,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      0.967741935483871,
+      1.0,
+      1.0,
+      0.9655172413793104,
+      1.0,
+      1.0,
+      1.0,
+      0.967741935483871,
+      1.0,
+      1.0,
+      0.9285714285714286
+    ]
+  },
+  "test": {
+    "accuracy_21": {
+      "value": 0.9874213836477987,
+      "k": 314,
+      "n": 318,
+      "ci": [
+        0.9681088221316358,
+        0.9950979230498447
+      ]
+    },
+    "known_accuracy": {
+      "value": 0.9966996699669967,
+      "k": 302,
+      "n": 303,
+      "ci": [
+        0.9815449762439091,
+        0.9994171879476476
+      ]
+    },
+    "false_rejection": {
+      "value": 0.0033003300330033004,
+      "k": 1,
+      "n": 303,
+      "ci": [
+        0.0005828120523523866,
+        0.018455023756090795
+      ]
+    },
+    "others_recall": {
+      "value": 0.8,
+      "k": 12,
+      "n": 15,
+      "ci": [
+        0.5481406466534955,
+        0.9295257935638959
+      ]
+    },
+    "others_precision": {
+      "value": 0.9230769230769231,
+      "k": 12,
+      "n": 13,
+      "ci": [
+        0.6668546607175265,
+        0.9862899336203037
+      ]
+    },
+    "per_class_f1": [
+      1.0,
+      0.967741935483871,
+      1.0,
+      1.0,
+      0.967741935483871,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      0.967741935483871,
+      1.0,
+      1.0,
+      1.0,
+      0.9655172413793104,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      0.8571428571428571
+    ]
+  },
+  "unseen": {
+    "value": 0.4166666666666667,
+    "k": 15,
+    "n": 36,
+    "ci": [
+      0.2714033350508729,
+      0.5780003033572231
+    ]
+  },
+  "m1_mobilenetv2": {
+    "val_accuracy": 0.9967,
+    "test_accuracy": 0.9934
+  },
+  "environment": {
+    "python": "3.13.16",
+    "tensorflow": "2.21.0",
+    "keras": "3.13.2",
+    "gpu": [
+      "Tesla T4"
+    ]
+  },
+  "artifact": {
+    "path": "models/mobilenetv2_others.keras",
+    "sha256": "9deb20818f4c29d098f014997ee729b1d1ab9eb8b88946ec9637282b4fe687ac"
+  },
+  "issues": []
+}
