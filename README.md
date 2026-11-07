@@ -19,9 +19,17 @@ This project compares grid concatenation with mask-based copy-paste training dat
 | `models/` | Class map and detector threshold shared by both models; the trained weights go here (not in git), see `models/README.md` |
 | `demo/` | `predict.py` (single image → ID; multi-object image → IDs and boxes) and `demo_app.py` (local Gradio demo) with example images; see `demo/README.md` |
 
-Course milestones are marked with git tags rather than folders: [`m2-submitted`](../../tree/m2-submitted) (Oct 27) and [`m3-submitted`](../../tree/m3-submitted) (Nov 3, with the earlier `m1/`, `m2/`, `m3/` layout).
+Model versions are marked with git tags per component (each tag is a snapshot of the whole repository):
 
-The tag `m2-submitted` also holds the executed Colab notebook, report and figures of the submitted M2 run. Data, run outputs and the mask cache are not in the repository; the notebooks read the course dataset from Google Drive. The trained weights used by the demo (`mobilenetv2.keras`, `d1_yolov8n_best.pt`) are not published yet; they will be released once the models are final.
+| Tag | What changed |
+|---|---|
+| [`classification-v1`](../../tree/classification-v1) | 20-class MobileNetV2 (M1, single-object identification) |
+| [`classification-v2`](../../tree/classification-v2) | 21 classes with `OTHERS` and a rejection threshold chosen on validation |
+| [`detection-v1`](../../tree/detection-v1) | YOLOv8n as submitted for M2 (Colab run, D1-test mAP@0.5 0.908), with the earlier `m1/`, `m2/`, `m3/` layout |
+| [`detection-v2`](../../tree/detection-v2) | YOLOv8n retrained on the cluster after mask review (D1-test mAP@0.5 0.928) |
+| [`demo`](../../tree/demo) | Local demo (M3): single-object ID with OTHERS, multi-object IDs and boxes |
+
+The tag `detection-v1` also holds the executed Colab notebook, report and figures of the submitted M2 run. Data, run outputs and the mask cache are not in the repository; the notebooks read the course dataset from Google Drive. The trained weights used by the demo (`mobilenetv2.keras`, `d1_yolov8n_best.pt`) are not published yet; they will be released once the models are final.
 
 ## Project scope
 
@@ -89,7 +97,7 @@ The two M2 test sets were generated from different usable source images, so the 
 ## Running the project
 
 - **Classification (M1):** open `classification/m1_classification.ipynb` in Colab with a T4 GPU, add a Drive shortcut to the course data folder, and run all cells; outputs are written to `IE7615_project/runs/` on Drive.
-- **Detection (M2):** on the cluster, follow `detection/cluster/README.md` (Slurm job running `detection/src/m2_detection.py`); on Colab, convert the script with `detection/src/percent2ipynb.py` or use the notebook under the tag `m2-submitted`.
+- **Detection (M2):** on the cluster, follow `detection/cluster/README.md` (Slurm job running `detection/src/m2_detection.py`); on Colab, convert the script with `detection/src/percent2ipynb.py` or use the notebook under the tag `detection-v1`.
 - **Demo (M3, local CPU):** put the two weight files into `models/` and follow `demo/README.md`; the demo runs at `http://127.0.0.1:7860` on the local machine.
 
 Docker and API instructions will accompany those implementations. Final evaluation images will not be used as routine CI fixtures.

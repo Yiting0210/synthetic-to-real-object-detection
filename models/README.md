@@ -26,4 +26,4 @@ but 48 of the 83 flagged masks were reviewed and kept (`../detection/results/dat
 
 D1-test: mAP@0.5 0.928, mAP@0.5:0.95 0.743, macro-F1 0.900 (submitted run: 0.908 / 0.738 / 0.890). OBJ001 AP@0.5 0.658 (was 0.438).
 D1-test was regenerated because the usable source images changed, so the comparison is not on identical test images.
-Full tables: `../detection/results/README.md`. The submitted run (Colab `m2_20261027_123730`): its executed notebook, report and figures are in git under the tag `m2-submitted`; its weights stay on Drive.
+Full tables: `../detection/results/README.md`. The submitted run (Colab `m2_20261027_123730`): its executed notebook, report and figures are in git under the tag `detection-v1`; its weights stay on Drive.

@@ -20,7 +20,7 @@ Both tools read the repository-level `../models/` folder (change it with `--mode
 | `selection.json` | in git; from the retrained run, see `../detection/results/` (confidence threshold chosen on D1-val: 0.55) |
 
 The demo images in `examples/{single,multi}/` come from the same retrained run. Each model goes with the examples of its own run:
-the composites were regenerated, so `d1_test_00129.jpg` is a different image for the submitted M2 model (tag `m2-submitted`).
+the composites were regenerated, so `d1_test_00129.jpg` is a different image for the submitted M2 model (tag `detection-v1`).
 
 `predict.py` checks that the detector's class names match `classes.json` and stops if they don't.
 
