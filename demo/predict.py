@@ -1,6 +1,6 @@
 """M3 model interface: single-object image → object ID; multi-object image → IDs and locations of all objects.
 
-Models (copied from the M1 / M2 run folders on Drive into one folder, default ./models):
+Models (copied from the M1 / M2 run folders on Drive into one folder, default ../models, the repository-level models/ folder):
     classes.json          class index ↔ course ID (from M1, shared by both models)
     mobilenetv2.keras     M1 classifier selected on validation (preprocessing is built into the model)
     d1_yolov8n_best.pt    M2 detector
@@ -9,7 +9,7 @@ Models (copied from the M1 / M2 run folders on Drive into one folder, default ./
 Usage:
     python predict.py single path/to/image.jpg
     python predict.py multi  path/to/composite.jpg --save annotated.jpg
-    python predict.py multi  photo.jpg --conf 0.4 --models-dir ../models
+    python predict.py multi  photo.jpg --conf 0.4 --models-dir path/to/models
 
 Output is JSON on stdout. TensorFlow is only imported for `single`, Ultralytics only for `multi`.
 """
@@ -124,7 +124,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("mode", choices=["single", "multi"])
     ap.add_argument("image", type=Path)
-    ap.add_argument("--models-dir", type=Path, default=Path(__file__).parent / "models")
+    ap.add_argument("--models-dir", type=Path, default=Path(__file__).resolve().parent.parent / "models")
     ap.add_argument("--conf", type=float, default=None, help="detector confidence threshold (default: from selection.json)")
     ap.add_argument("--save", type=Path, default=None, help="multi mode: save the annotated image here")
     args = ap.parse_args(argv)

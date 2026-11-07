@@ -1,4 +1,4 @@
-# M3 — model interface and live demo
+# Demo — model interface and live demo (M3)
 
 Course requirements (due Nov 3): 1) the object detection model is complete; 2) live demonstration: a) single-object image → ID; b) multi-object image → ID and location of every object.
 
@@ -10,14 +10,14 @@ Course requirements (due Nov 3): 1) the object detection model is complete; 2) l
 
 ## 1. Get the models (once)
 
-`classes.json` and `selection.json` are already in `m3/models/`. The two weight files are not in git: download them from the GitHub release `m3-demo` into `m3/models/` (or copy them from Drive):
+Both tools read the repository-level `../models/` folder (change it with `--models-dir`). `classes.json` and `selection.json` are already there. The two weight files are not in git: copy them from Drive into `../models/`:
 
-| File | Release asset / Drive source |
+| File | Source |
 |---|---|
 | `classes.json` | in git; from `IE7615_project/runs/m1_20261018_022316/data/classes.json` |
-| `mobilenetv2.keras` | release `m3-demo`; Drive `IE7615_project/runs/m1_20261018_022316/models/mobilenetv2.keras` |
-| `d1_yolov8n_best.pt` | release `m3-demo`; retrained after mask review, cluster run `m2_20261103_225708` |
-| `selection.json` | in git; same as `../m2/models/selection.json` (confidence threshold chosen on D1-val: 0.55) |
+| `mobilenetv2.keras` | Drive `IE7615_project/runs/m1_20261018_022316/models/mobilenetv2.keras` |
+| `d1_yolov8n_best.pt` | retrained after mask review, cluster run `m2_20261103_225708` |
+| `selection.json` | in git; from the retrained run, see `../detection/results/` (confidence threshold chosen on D1-val: 0.55) |
 
 The demo images in `examples/{single,multi}/` come from the same retrained run. Each model goes with the examples of its own run:
 the composites were regenerated, so `d1_test_00129.jpg` is a different image for the submitted M2 model (tag `m2-submitted`).
@@ -42,7 +42,7 @@ conda run -n ie7615-demo pip install -r requirements.txt
 
 ## 3. Run
 
-In PowerShell, inside `m3/` (no activation needed; `conda activate` only works in Anaconda Prompt or after `conda init powershell`):
+In PowerShell, inside `demo/` (no activation needed; `conda activate` only works in Anaconda Prompt or after `conda init powershell`):
 
 ```powershell
 & "E:\CodeTools\anaconda3\envs\ie7615-demo\python.exe" -s demo_app.py

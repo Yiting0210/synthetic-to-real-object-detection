@@ -1,12 +1,12 @@
 # M2 on the university cluster (Slurm)
 
-This folder runs the same code as `m2/m2_detection.ipynb` (`code/m2_detection.py`), as a batch job instead of in Colab. The folder layout copies the Drive layout, so no paths in the code change.
+This folder runs the detection pipeline (`../src/m2_detection.py`, the same code as the M2 Colab notebook) as a batch job instead of in Colab. It was uploaded to the cluster as `~/hpc_m2`, the name used in the commands below. The folder layout copies the Drive layout, so no paths in the code change.
 
 ```
-hpc_m2/
+hpc_m2/                   (this folder, detection/cluster/ in the repository)
 ├── setup_env.sh          one-time setup on the login node
 ├── m2_job.sbatch         the Slurm job
-├── code/m2_detection.py  M2 code (same as m2/src/m2_detection.py)
+├── code/m2_detection.py  copy of ../src/m2_detection.py (if missing, the job uses ../src)
 ├── run/yolov8n.pt        COCO-pretrained weights (job working directory)
 ├── data/raw/             ← you add: the 20 images_OBJxxx folders
 ├── IE7615_project/
@@ -21,7 +21,7 @@ hpc_m2/
 1. Drive → `data/student uploaded files` → download all `images_OBJxxx` folders → put the 20 folders directly in `data/raw/`. Drive may split the download into several zips; unzip all into the same place. A folder that loses its trailing space (`images_OBJ001 ` → `images_OBJ001`) is fine: the code finds it.
 2. Drive → `data/IE7615_project/runs/m1_20261018_022316/data/` → download `classes.json` and `split_manifest.csv` → put them in `IE7615_project/runs/m1_20261018_022316/data/`. **Do not open them in Excel**: saving changes the checksum, and the job stops on purpose if they differ from M1.
 3. Optional: if the Colab run already finished the masks, download `data/IE7615_project/masks/raw_u2net.zip` → put it in `IE7615_project/masks/`. The job then skips the mask step.
-4. Zip the whole `hpc_m2` folder.
+4. Copy `../src/m2_detection.py` to `code/`, then zip this folder as `hpc_m2.zip` with `hpc_m2/` as its top folder.
 
 ## 2. Upload and set up (once)
 
@@ -63,7 +63,7 @@ Expected time: masks 15–30 min on 8 CPUs (seconds with the cache), generation 
 
 ## 4. Get the results back
 
-Results are in `IE7615_project/runs/m2_<time>/`, same as on Drive. Download that folder; `M2_results_for_report.md` has the tables for the report, and `demo_examples/`, `models/d1_yolov8n_best.pt`, `records/selection.json` are what M3 needs.
+Results are in `IE7615_project/runs/m2_<time>/`, same as on Drive. Download that folder; `M2_results_for_report.md` has the tables for the report, and `demo_examples/`, `models/d1_yolov8n_best.pt`, `records/selection.json` are what the demo needs (`models/` and `demo/examples/` in the repository).
 
 ## If something fails
 

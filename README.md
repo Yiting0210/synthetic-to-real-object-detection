@@ -12,12 +12,16 @@ This project compares grid concatenation with mask-based copy-paste training dat
 
 | Folder | What it contains |
 | --- | --- |
-| `m1/` | `m1_classification.ipynb`: data checks, near-duplicate grouping, grouped split, four classifiers, validation-based selection, test results (executed on Colab T4) |
-| `m2/` | `src/m2_detection.py`: object masks, grid-composite generation, YOLOv8n fine-tuning, threshold on validation, test results (run as a notebook on Colab or as a script on the cluster). Results of the current (retrained) run: `M2_results_retrained.md`, `figures/`, `records/`, `models/README.md`; `data/` holds the mask review, mask and composite manifests and the per-composite generation records |
-| `m3/` | `predict.py` (single image → ID; multi-object image → IDs and boxes) and `demo_app.py` (local Gradio demo); see `m3/README.md` |
-| `hpc_m2/` | Slurm job and environment setup to run M2 on the Explorer cluster |
+| `classification/` | `m1_classification.ipynb`: data checks, near-duplicate grouping, grouped split, four classifiers, validation-based selection, test results (executed on Colab T4) |
+| `detection/src/` | `m2_detection.py`: object masks, grid-composite generation, YOLOv8n fine-tuning, threshold on validation, test results (run as a notebook on Colab or as a script on the cluster) |
+| `detection/cluster/` | Slurm job and environment setup to run the detection pipeline on the Explorer cluster |
+| `detection/results/` | Results of the current (retrained) detector run: `README.md` (tables), `figures/`, `records/`; `data/` holds the mask review, mask and composite manifests and the per-composite generation records |
+| `models/` | Class map and detector threshold shared by both models; the trained weights go here (not in git), see `models/README.md` |
+| `demo/` | `predict.py` (single image → ID; multi-object image → IDs and boxes) and `demo_app.py` (local Gradio demo) with example images; see `demo/README.md` |
 
-The M2 version submitted on Oct 27 (executed Colab notebook, report and figures) is kept under the git tag [`m2-submitted`](../../tree/m2-submitted). Data, run outputs and the mask cache are not in the repository; the notebooks read the course dataset from Google Drive. The trained weights used by the demo (`mobilenetv2.keras`, `d1_yolov8n_best.pt`) are assets of the release `m3-demo`.
+Course milestones are marked with git tags rather than folders: [`m2-submitted`](../../tree/m2-submitted) (Oct 27) and [`m3-submitted`](../../tree/m3-submitted) (Nov 3, with the earlier `m1/`, `m2/`, `m3/` layout).
+
+The tag `m2-submitted` also holds the executed Colab notebook, report and figures of the submitted M2 run. Data, run outputs and the mask cache are not in the repository; the notebooks read the course dataset from Google Drive. The trained weights used by the demo (`mobilenetv2.keras`, `d1_yolov8n_best.pt`) are not published yet; they will be released once the models are final.
 
 ## Project scope
 
@@ -36,7 +40,7 @@ The M2 version submitted on Oct 27 (executed Colab notebook, report and figures)
 5. Report classification accuracy/macro-F1 and confusion matrices; detection mAP@0.5 and mAP@0.5:0.95; and real-case recall, matched-box IoU and false positives per image.
 6. Record configurations, seeds, code revisions, dataset checksums and model artifacts with MLflow (portable JSON/CSV records as a fallback). Store per-composite generation records for sample regeneration.
 
-**Compute plan:** M1 and the submitted M2 ran on Google Colab (Tesla T4); the retrained M2 ran on the Explorer cluster (Tesla P100, Slurm). The multi-seed detection comparison is planned for the university HPC cluster using Slurm (`hpc_m2/`), with Colab as fallback. Persist run outputs on storage appropriate to each environment. CPU deployment benchmarks name the exact machine and compare runtimes under matched conditions.
+**Compute plan:** M1 and the submitted M2 ran on Google Colab (Tesla T4); the retrained M2 ran on the Explorer cluster (Tesla P100, Slurm). The multi-seed detection comparison is planned for the university HPC cluster using Slurm (`detection/cluster/`), with Colab as fallback. Persist run outputs on storage appropriate to each environment. CPU deployment benchmarks name the exact machine and compare runtimes under matched conditions.
 
 ## Planned engineering work
 
@@ -84,9 +88,9 @@ The two M2 test sets were generated from different usable source images, so the 
 
 ## Running the project
 
-- **M1:** open `m1/m1_classification.ipynb` in Colab with a T4 GPU, add a Drive shortcut to the course data folder, and run all cells; outputs are written to `IE7615_project/runs/` on Drive.
-- **M2:** on the cluster, follow `hpc_m2/README.md` (Slurm job running `m2/src/m2_detection.py`); on Colab, convert the script with `m2/src/percent2ipynb.py` or use the notebook under the tag `m2-submitted`.
-- **M3 demo (local CPU):** download the two weight files from the release `m3-demo` into `m3/models/` and follow `m3/README.md`; the demo runs at `http://127.0.0.1:7860` on the local machine.
+- **Classification (M1):** open `classification/m1_classification.ipynb` in Colab with a T4 GPU, add a Drive shortcut to the course data folder, and run all cells; outputs are written to `IE7615_project/runs/` on Drive.
+- **Detection (M2):** on the cluster, follow `detection/cluster/README.md` (Slurm job running `detection/src/m2_detection.py`); on Colab, convert the script with `detection/src/percent2ipynb.py` or use the notebook under the tag `m2-submitted`.
+- **Demo (M3, local CPU):** put the two weight files into `models/` and follow `demo/README.md`; the demo runs at `http://127.0.0.1:7860` on the local machine.
 
 Docker and API instructions will accompany those implementations. Final evaluation images will not be used as routine CI fixtures.
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 # M2 on the cluster: masks → D1 generation → YOLOv8n training → threshold on D1-val → D1-test.
-# Submit from inside hpc_m2:   cd hpc_m2 && sbatch m2_job.sbatch
+# Submit from inside this folder (uploaded to the cluster as ~/hpc_m2):   cd hpc_m2 && sbatch m2_job.sbatch
 #SBATCH --job-name=m2_yolo
 #SBATCH --partition=courses-gpu    # Explorer: course GPU partition (the general `gpu` partition is often full)
 #SBATCH --account=ie7615.202710
@@ -36,8 +36,8 @@ export MPLBACKEND=Agg
 echo "job $SLURM_JOB_ID on $(hostname), $(date)"
 nvidia-smi || echo "nvidia-smi not available"
 cd "$B/run"                                # yolov8n.pt is here
-CODE="$B/code/m2_detection.py"             # bundle copy; in the git repo the code lives in m2/src
-[ -f "$CODE" ] || CODE="$B/../m2/src/m2_detection.py"
+CODE="$B/code/m2_detection.py"             # bundle copy; in the git repo the code lives in detection/src
+[ -f "$CODE" ] || CODE="$B/../src/m2_detection.py"
 export M2_REPO_DIR="$(dirname "$CODE")"
 python -u "$CODE"
 echo "done $(date); results in $M2_PROJECT/runs/"

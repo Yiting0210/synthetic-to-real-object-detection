@@ -2,42 +2,39 @@
 proposal.md
 *_zh.ipynb
 *_zh.py
+# Submitted reports and the submitted M2 run (reports carry personal contact details;
+# the submitted versions are in git history under the tags m2-submitted and m3-submitted)
+submissions/
 
 # Reports: the cover page carries personal contact details
 *.docx
 *.pdf
 
-# Model weights (yolov8n.pt is downloaded automatically; trained weights will be release assets)
+# Model weights (yolov8n.pt is downloaded automatically; trained weights are not in git)
 *.pt
 *.keras
 *.onnx
 
-# Copy of m2/src/m2_detection.py used only in the cluster bundle
-hpc_m2/code/
-
-# The submitted M2 (Colab, Oct 27) lives in git history under the tag m2-submitted
-m2_old/
-# Same images as m3/examples
-m2/examples/
-
-# Cluster bundle archive, run outputs and mask cache (kept on Drive and on the cluster)
-hpc_m2.zip
-hpc_m2/IE7615_project/masks/*
-!hpc_m2/IE7615_project/masks/OPTIONAL_MASK_CACHE_HERE.txt
-hpc_m2/IE7615_project/runs/*
-!hpc_m2/IE7615_project/runs/m1_20261018_022316/
-hpc_m2/IE7615_project/runs/m1_20261018_022316/data/*
-!hpc_m2/IE7615_project/runs/m1_20261018_022316/data/PUT_M1_FILES_HERE.txt
+# Cluster toolkit: copy of detection/src/m2_detection.py, old bundle archive,
+# run outputs and mask cache (kept on Drive and on the cluster)
+detection/cluster/code/
+detection/*.zip
+detection/cluster/IE7615_project/masks/*
+!detection/cluster/IE7615_project/masks/OPTIONAL_MASK_CACHE_HERE.txt
+detection/cluster/IE7615_project/runs/*
+!detection/cluster/IE7615_project/runs/m1_20261018_022316/
+detection/cluster/IE7615_project/runs/m1_20261018_022316/data/*
+!detection/cluster/IE7615_project/runs/m1_20261018_022316/data/PUT_M1_FILES_HERE.txt
+detection/cluster/logs/*
+!detection/cluster/logs/.keep
+detection/cluster/ycfg/*
+!detection/cluster/ycfg/.keep
+detection/cluster/work/
+detection/cluster/data/raw/*
+!detection/cluster/data/raw/PUT_IMAGE_FOLDERS_HERE.txt
 
 # Run outputs and caches
-hpc_m2/logs/*
-!hpc_m2/logs/.keep
-hpc_m2/ycfg/*
-!hpc_m2/ycfg/.keep
-hpc_m2/work/
-hpc_m2/data/raw/*
-!hpc_m2/data/raw/PUT_IMAGE_FOLDERS_HERE.txt
-m3/annotated*.jpg
+demo/annotated*.jpg
 __pycache__/
 *.pyc
 .ipynb_checkpoints/

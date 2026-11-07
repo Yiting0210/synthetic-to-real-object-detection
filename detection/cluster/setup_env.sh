@@ -1,6 +1,6 @@
 #!/bin/bash
 # One-time setup. Run on the LOGIN node (it has internet; compute nodes may not):
-#     cd hpc_m2 && bash setup_env.sh
+#     cd hpc_m2 && bash setup_env.sh      (this folder, uploaded to the cluster as ~/hpc_m2)
 # Creates the conda env "ie7615-m2" and pre-downloads everything the job needs:
 # YOLOv8n weights, the Ultralytics font and the rembg u2net model.
 set -eo pipefail
@@ -26,8 +26,8 @@ cd "$B/run"
 python - <<'EOF'
 from ultralytics import YOLO
 from ultralytics.utils.checks import check_font
-YOLO("yolov8n.pt")                      # weights → hpc_m2/run/yolov8n.pt
-check_font("Arial.ttf")                 # font → hpc_m2/ycfg/
+YOLO("yolov8n.pt")                      # weights → run/yolov8n.pt
+check_font("Arial.ttf")                 # font → ycfg/
 from rembg import new_session
 new_session("u2net")                    # mask model → ~/.u2net or ~/.rembg (home is shared with compute nodes)
 import torch, numpy

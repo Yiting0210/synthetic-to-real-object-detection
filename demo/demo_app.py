@@ -1,7 +1,7 @@
 """M3 live demo: a local web page with the two required modes.
 
     python demo_app.py                      # opens http://127.0.0.1:7860
-    python demo_app.py --models-dir ../models --examples examples
+    python demo_app.py --models-dir ../models --examples examples   # the defaults
 
 Tab 1 "Single object → ID": the M1 classifier (MobileNetV2) gives the object ID and its top-3 probabilities.
 Tab 2 "Multi-object → IDs + locations": the M2 detector (YOLOv8n) draws every object with its ID and lists the boxes.
@@ -18,8 +18,8 @@ from PIL import Image
 from predict import Classifier, Detector, draw
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--models-dir", type=Path, default=Path(__file__).parent / "models")
-ap.add_argument("--examples", type=Path, default=Path(__file__).parent / "examples")
+ap.add_argument("--models-dir", type=Path, default=Path(__file__).resolve().parent.parent / "models")
+ap.add_argument("--examples", type=Path, default=Path(__file__).resolve().parent / "examples")
 ap.add_argument("--port", type=int, default=7860)
 args = ap.parse_args()
 
@@ -35,7 +35,7 @@ if detector:
 
 # Test results reported in M1 and M2 (shown on the page; not recomputed here)
 M1_RESULT = "test accuracy 0.993"
-M2_RESULT = "D1-test mAP@0.5 0.928"   # retrained detector (m2/models); the submitted M2 model had 0.908
+M2_RESULT = "D1-test mAP@0.5 0.928"   # retrained detector (models/, see detection/results); the submitted M2 model had 0.908
 REPO_URL = "https://github.com/Yiting0210/synthetic-to-real-object-detection"   # header GitHub icon; inactive if empty
 
 # ---------------------------------------------------------------- icons (inline SVG, no icon library needed)
