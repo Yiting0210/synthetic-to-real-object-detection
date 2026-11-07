@@ -105,11 +105,29 @@ TRAIN_AUG = {"default": {}, "large": dict(scale=0.9, mosaic=0.5)}[TRAIN_AUG_NAME
 # predicted/mask box area ratio, share of the mask box inside the predicted box, minimum number of such composites.
 SUSPECT = dict(conf=0.25, max_iou=0.6, area_ratio=1.5, gt_inside=0.8, min_hits=2)
 
+# D3 copy-paste and the D1 vs D1+D3 comparison (proposal §6.4, §7.2). Only used when M2_ARM is "A" or "B";
+# without it the run is the plain D1 pipeline above.
+#   arm A: D1-train (1,500 grid images)
+#   arm B: the last 750 D1-train images + 750 D3 images that reuse exactly the objects of the 750 grid images they replace
+# Both arms: fixed budget (60 epochs, no early stopping), checkpoint and threshold chosen on D1-val + hard-val.
+ARM = os.environ.get("M2_ARM", "").upper()
+assert ARM in ("", "A", "B"), "M2_ARM must be A, B or unset"
+TRAIN_SEED = int(os.environ.get("M2_TRAIN_SEED", SEED))     # training seed only; the data are always generated with SEED
+D3_SIZES = dict(d3train=750, hardval=300, thard=300)
+D3_PROFILES = {                                # size = longest side of the cut-out as a fraction of the canvas (log-uniform)
+    "normal": dict(n_obj=(2, 6), size=(0.2, 1.0), rot_deg=30, jitter=0.2, blur_p=0.3, blur_r=(0.5, 1.5), jpeg_q=(95, 95)),
+    "hard":   dict(n_obj=(3, 6), size=(0.12, 0.8), rot_deg=30, jitter=0.3, blur_p=0.6, blur_r=(0.5, 2.0), jpeg_q=(55, 85)),
+}
+BG_DIR = Path(os.environ.get("M2_BG_DIR", "")) if os.environ.get("M2_BG_DIR") else None   # set later: PROJECT / "backgrounds"
+ARM_EPOCHS = 60
+
 if SMOKE:
     SET_SIZES = dict(train=40, val=12, test=12)
     EPOCHS, PATIENCE, BATCH = 1, 1, 8
     FLOORS = dict(train=(1, 1), val=(1, 1), test=(1, 1))
     SUSPECT = dict(SUSPECT, conf=0.001, min_hits=1)
+    D3_SIZES = dict(d3train=20, hardval=10, thard=10)
+    ARM_EPOCHS = 1
 
 # %%
 if IN_COLAB:
@@ -125,6 +143,7 @@ else:
 M1_RUN_DIR = Path(os.environ.get("M2_M1_RUN", PROJECT / "runs" / "m1_20261018_022316"))   # the submitted M1 run
 MASK_DIR = PROJECT / "masks"                   # persistent: mask cache, review sheets, mask_review.csv
 OUT_ROOT = PROJECT / "runs"
+BG_DIR = BG_DIR or PROJECT / "backgrounds"     # optional D3 backgrounds: backgrounds/A (train, hard-val), backgrounds/B (T-hard only)
 
 # Code version (M1 had none). Open the notebook from GitHub at a commit, or fill these in. Never put tokens here.
 REPO_URL = ""      # e.g. "https://github.com/<user>/<repo>.git"
@@ -141,7 +160,8 @@ for p, what in [(DATA_DIR, "shared data folder"), (M1_RUN_DIR, "M1 run folder")]
     if not p.exists():
         raise FileNotFoundError(f"{what} not found: {p}")
 
-RUN_TAG = datetime.now().strftime("m2_%Y%m%d_%H%M%S") + (f"_{TRAIN_AUG_NAME}aug" if TRAIN_AUG else "") + ("_smoke" if SMOKE else "")
+RUN_TAG = (datetime.now().strftime("m2_%Y%m%d_%H%M%S") + (f"_arm{ARM}_seed{TRAIN_SEED}" if ARM else "")
+           + (f"_{TRAIN_AUG_NAME}aug" if TRAIN_AUG else "") + ("_smoke" if SMOKE else ""))
 OUT_DIR = OUT_ROOT / RUN_TAG
 for sub in ["data", "models", "figures", "records"]:
     (OUT_DIR / sub).mkdir(parents=True, exist_ok=True)
@@ -537,13 +557,13 @@ def generate_set(split, n_images, seed):
         records.append(rec)
     return records, skips
 
-def write_set(records, out_root):
+def write_set(records, out_root, renderer=render):
     (out_root / "images" / records[0]["split"]).mkdir(parents=True, exist_ok=True)
     (out_root / "labels" / records[0]["split"]).mkdir(parents=True, exist_ok=True)
     for rec in records:
-        img, labels = render(rec)
+        img, labels = renderer(rec)
         ip = out_root / "images" / rec["split"] / f"{rec['image_id']}.jpg"
-        img.save(ip, quality=JPEG_Q)
+        img.save(ip, quality=rec.get("jpeg_q", JPEG_Q))
         lines = []
         for lb in labels:
             x0, y0, x1, y1 = lb["box"]
@@ -647,18 +667,234 @@ shutil.make_archive(str(OUT_DIR / "data" / "d1_dataset"), "zip", D1)
 print("Dataset manifests sha256:", {s: v[:12] for s, v in DS_SHA.items()})
 
 # %% [markdown]
+# # Task5b - D3 copy-paste sets (only with `M2_ARM=A` or `B`)
+# Each source photo's **mask cuts the object out** (only the mask pixels are pasted), and the cut-outs are placed anywhere on a 640×640 canvas: longest side 0.2–1.0 of the canvas (log-uniform, so small and large objects both occur), flip, rotation ±30°, color jitter, sometimes Gaussian blur; later objects may cover earlier ones under the same visibility rule as D1 (≥30% visible, visible box ≥12 px). Boxes are again the tight box of the **visible** mask pixels.
+#
+# | Set | Source photos | Background | Purpose |
+# |---|---|---|---|
+# | D3-train (750) | the **same objects** as D1-train images 0–749, which it replaces in arm B | `backgrounds/A` | Training, arm B |
+# | hard-val (300) | val split, class-balanced | `backgrounds/A` | Checkpoint and threshold, together with D1-val |
+# | T-hard (300) | test split, class-balanced, 3–6 objects, smaller, more blur, JPEG noise | `backgrounds/B` (never used for training or tuning) | Final test |
+#
+# Without background photos (`IE7615_project/backgrounds/A` and `B`), the gray canvas is used; T-hard falls back to gray if `B` is empty, so training backgrounds never leak into the test set. Every D3 composite is described by its record (objects, sizes, positions, background crop), and `render_d3()` rebuilds it from the record alone.
+
+# %%
+from PIL import ImageFilter
+
+def list_backgrounds(group):
+    d = BG_DIR / group
+    return sorted(p.name for p in d.glob("*") if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".heic", ".heif"}) if d.exists() else []
+
+@lru_cache(maxsize=None)
+def load_background(group, name):
+    with Image.open(BG_DIR / group / name) as im:
+        return ImageOps.exif_transpose(im).convert("RGB")
+
+@lru_cache(maxsize=None)
+def load_cutout(image_id):
+    """Source photo and mask cropped to the mask's tight box (2-px margin): the piece D3 pastes."""
+    img, m = load_source(image_id)
+    b = tight_box(masks[image_id])
+    box = (max(b[0] - 2, 0), max(b[1] - 2, 0), min(b[2] + 2, img.width), min(b[3] + 2, img.height))
+    return img.crop(box), m.crop(box)
+
+def render_d3(rec, draw=True):
+    """Rebuild a D3 composite and its labels from its record (no randomness here). draw=False computes only the labels."""
+    canvas = None
+    if draw:
+        bg = rec["bg"]
+        if bg is None:
+            canvas = Image.new("RGB", (CANVAS, CANVAS), BG_COLOR)
+        else:
+            im = load_background(bg["group"], bg["file"])
+            s = int(min(im.size) * bg["crop"])              # random square crop of the background photo
+            x, y = int((im.width - s) * bg["pos"][0]), int((im.height - s) * bg["pos"][1])
+            canvas = im.crop((x, y, x + s, y + s)).resize((CANVAS, CANVAS), Image.Resampling.BILINEAR)
+            if bg["flip"]:
+                canvas = ImageOps.mirror(canvas)
+    occ = np.full((CANVAS, CANVAS), -1, np.int16)
+    full = []
+    for k, o in enumerate(rec["objects"]):
+        img, m = load_cutout(o["source"])
+        if o["flip"]:
+            img, m = ImageOps.mirror(img), ImageOps.mirror(m)
+        m = m.rotate(o["angle"], resample=Image.Resampling.NEAREST, expand=True, fillcolor=0)
+        f = o["size"] * CANVAS / max(m.width, m.height)    # longest side of the cut-out = size × canvas
+        nw, nh = max(1, round(m.width * f)), max(1, round(m.height * f))
+        m = m.resize((nw, nh), Image.Resampling.NEAREST)
+        ma = np.asarray(m) > 127
+        x0, y0 = int(o["center"][0] * CANVAS - nw / 2), int(o["center"][1] * CANVAS - nh / 2)
+        if draw:
+            b, c, s = o["jitter"]
+            img = ImageEnhance.Color(ImageEnhance.Contrast(ImageEnhance.Brightness(img).enhance(b)).enhance(c)).enhance(s)
+            img = img.rotate(o["angle"], resample=Image.Resampling.BILINEAR, expand=True).resize((nw, nh), Image.Resampling.BILINEAR)
+            if o["blur"] > 0:
+                img = img.filter(ImageFilter.GaussianBlur(o["blur"]))
+            canvas.paste(img, (x0, y0), m)                  # the mask is the alpha: only the object is pasted
+        placed = np.zeros((CANVAS, CANVAS), bool)
+        xs, ys = slice(max(x0, 0), min(x0 + nw, CANVAS)), slice(max(y0, 0), min(y0 + nh, CANVAS))
+        if xs.start < xs.stop and ys.start < ys.stop:
+            placed[ys, xs] = ma[ys.start - y0:ys.stop - y0, xs.start - x0:xs.stop - x0]   # clipped to the canvas
+        occ[placed] = k                                      # a later object covers earlier ones
+        full.append(int(ma.sum()))                           # pixels if fully placed
+    labels = []
+    for k, o in enumerate(rec["objects"]):
+        vis = occ == k
+        labels.append(dict(class_idx=CID2IDX[SRC[o["source"]]["class_id"]], box=tight_box(vis),
+                           visibility=float(vis.sum() / max(full[k], 1))))
+    return canvas, labels
+
+def sample_d3_object(rng, source, prof):
+    lo, hi = prof["size"]
+    blur = round(float(rng.uniform(*prof["blur_r"])), 2) if rng.random() < prof["blur_p"] else 0.0
+    return dict(source=source, flip=bool(rng.random() < 0.5),
+                angle=round(float(rng.uniform(-prof["rot_deg"], prof["rot_deg"])), 2),
+                jitter=[round(float(rng.uniform(1 - prof["jitter"], 1 + prof["jitter"])), 3) for _ in range(3)],
+                size=round(float(np.exp(rng.uniform(np.log(lo), np.log(hi)))), 3),
+                center=[round(float(rng.uniform(0.1, 0.9)), 3) for _ in range(2)], blur=blur)
+
+def sample_background(rng, group):
+    names = BGS.get(group, [])
+    if not names:
+        return None
+    return dict(group=group, file=names[int(rng.integers(len(names)))], crop=round(float(rng.uniform(0.6, 1.0)), 3),
+                pos=[round(float(rng.random()), 3) for _ in range(2)], flip=bool(rng.random() < 0.5))
+
+def generate_d3_set(name, split, n_images, seed, prof, bg_group, object_lists=None):
+    """object_lists: fixed source photos per image (D3-train reuses the objects of the grid images it replaces);
+    otherwise class-balanced sampling from the split, as in generate_set()."""
+    rng = np.random.default_rng(seed)
+    if object_lists is None:
+        usable = {cid: [r["image_id"] for r in sources if r["class_id"] == cid and r["split"] == split
+                        and mask_info[r["image_id"]]["status"] == "usable"] for cid in CLASS_IDS}
+        cycles = {cid: [] for cid in CLASS_IDS}
+        def next_source(cid):
+            if not cycles[cid]:
+                cycles[cid] = list(rng.permutation(usable[cid]))
+            return str(cycles[cid].pop())
+        counts = rng.integers(prof["n_obj"][0], prof["n_obj"][1] + 1, n_images)
+        seq = np.resize(np.arange(NUM_CLASSES), counts.sum())
+        rng.shuffle(seq)
+        object_lists, pos = [], 0
+        for n in counts:
+            object_lists.append([next_source(CLASS_IDS[c]) for c in seq[pos:pos + n]]); pos += n
+    records, skips = [], 0
+    for i, objs in enumerate(object_lists):
+        rec = dict(image_id=f"{name}_{i:05d}", split=name, source_split=split, seed=[seed, i], kind="d3",
+                   bg=sample_background(rng, bg_group), jpeg_q=int(rng.integers(prof["jpeg_q"][0], prof["jpeg_q"][1] + 1)),
+                   objects=[], skipped=[])
+        for src in objs:
+            for t in range(MAX_TRIES):
+                o = sample_d3_object(rng, src, prof)
+                _, lbs = render_d3(dict(rec, objects=rec["objects"] + [o]), draw=False)
+                if all(label_ok(lb) for lb in lbs):        # every object on the canvas must still satisfy the visibility rule
+                    rec["objects"].append(o)
+                    break
+            else:
+                skips += 1
+                rec["skipped"].append(dict(source=src, tries=MAX_TRIES))
+        records.append(rec)
+    return records, skips
+
+d3_records, d3_skips, BGS = {}, {}, {}
+if ARM:
+    BGS = {g: list_backgrounds(g) for g in ("A", "B")}
+    print(f"Backgrounds in {BG_DIR}: A {len(BGS['A'])}, B {len(BGS['B'])}")
+    if not BGS["A"]:
+        issues.append("D3 without background photos: cut-outs pasted on the gray canvas")
+    if not BGS["B"]:
+        issues.append("T-hard on the gray canvas (no backgrounds/B; training backgrounds are never reused for the test set)")
+    replaced = d1_records["train"][:D3_SIZES["d3train"]]
+    specs = [("d3train", "train", "normal", "A", [[o["source"] for o in r["objects"]] for r in replaced]),
+             ("hardval", "val", "normal", "A", None),
+             ("thard", "test", "hard", "B", None)]
+    t0 = time.time()
+    for k, (name, split, prof, grp, objs) in enumerate(specs):
+        n = len(objs) if objs else D3_SIZES[name]
+        d3_records[name], d3_skips[name] = generate_d3_set(name, split, n, SEED * 1000 + 10 + k, D3_PROFILES[prof], grp, objs)
+        write_set(d3_records[name], D1, renderer=render_d3)
+        print(f"{name}: {len(d3_records[name])} images, {sum(len(r['objects']) for r in d3_records[name])} objects, "
+              f"{d3_skips[name]} skipped placements")
+    print(f"D3 generated in {time.time() - t0:.0f} s")
+
+    # split isolation: every D3 object comes from its own source split
+    for name, recs in d3_records.items():
+        assert all(SRC[o["source"]]["split"] == r["source_split"] for r in recs for o in r["objects"]), f"{name} uses another split"
+    # instance check: arm B (D1-train 750–1499 + D3-train) vs arm A (D1-train) per class
+    count = lambda recs: {cid: sum(lb["class_id"] == cid for r in recs for lb in r["labels"]) for cid in CLASS_IDS}
+    inst_a = count(d1_records["train"])
+    inst_b = {cid: a + b for (cid, a), b in zip(count(d1_records["train"][len(replaced):]).items(), count(d3_records["d3train"]).values())}
+    arm_md = md_table(["class", "arm A (D1)", "arm B (D1+D3)", "difference"],
+                      [[cid, inst_a[cid], inst_b[cid], inst_b[cid] - inst_a[cid]] for cid in CLASS_IDS]
+                      + [["**total**", sum(inst_a.values()), sum(inst_b.values()), sum(inst_b.values()) - sum(inst_a.values())]])
+    display(Markdown(arm_md))
+    if inst_a != inst_b:
+        issues.append(f"Arm A vs arm B instances differ by {sum(inst_b.values()) - sum(inst_a.values())} in total "
+                      "(skipped D3 placements); the comparison is approximately matched")
+
+    # arm B training folder: D1-train images 750–1499 + D3-train
+    for sub in ("images", "labels"):
+        (D1 / sub / "train_b").mkdir(parents=True, exist_ok=True)
+        for r in d1_records["train"][len(replaced):]:
+            ext = ".jpg" if sub == "images" else ".txt"
+            shutil.copy2(D1 / sub / "train" / f"{r['image_id']}{ext}", D1 / sub / "train_b")
+        for r in d3_records["d3train"]:
+            ext = ".jpg" if sub == "images" else ".txt"
+            shutil.copy2(D1 / sub / "d3train" / f"{r['image_id']}{ext}", D1 / sub / "train_b")
+
+    names_yaml = "names:\n" + "".join(f"  {i}: {CLASSES[i]}\n" for i in range(NUM_CLASSES))
+    arm_yaml = D1 / f"arm{ARM}.yaml"                     # training data of this arm; Ultralytics validates on D1-val + hard-val
+    arm_yaml.write_text(f"path: {D1.resolve().as_posix()}\ntrain: images/{'train' if ARM == 'A' else 'train_b'}\n"
+                        f"val: [images/val, images/hardval]\ntest: images/test\n" + names_yaml)
+    d3_yaml = D1 / "d3_eval.yaml"                        # val = hard-val, test = T-hard
+    d3_yaml.write_text(f"path: {D1.resolve().as_posix()}\ntrain: images/train\nval: images/hardval\ntest: images/thard\n" + names_yaml)
+
+    # records, manifests, regeneration spot check, examples
+    for name, recs in d3_records.items():
+        with open(OUT_DIR / "data" / f"{name}_records.jsonl", "w", encoding="utf-8") as f:
+            for r in recs:
+                f.write(json.dumps(r) + "\n")
+        mp = OUT_DIR / "data" / f"{name}_manifest.csv"
+        with open(mp, "w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f); w.writerow(["image", "image_sha256", "label", "label_sha256"])
+            w.writerows([[f"images/{name}/{r['image_id']}.jpg", r["image_sha256"], f"labels/{name}/{r['image_id']}.txt",
+                          file_hash(D1 / "labels" / name / f"{r['image_id']}.txt")] for r in recs])
+        DS_SHA[name] = file_hash(mp)
+    d3_spot = [d3_records[n][int(k)] for n in d3_records for k in spot_rng.choice(len(d3_records[n]), min(3, len(d3_records[n])), replace=False)]
+    d3_spot_ok = 0
+    for r in d3_spot:
+        render_d3(r)[0].save(WORK_DIR / "regen.jpg", quality=r["jpeg_q"])
+        d3_spot_ok += file_hash(WORK_DIR / "regen.jpg") == r["image_sha256"]
+    print(f"D3 regeneration spot check: {d3_spot_ok}/{len(d3_spot)} identical")
+    for a, b in [(arm_yaml, arm_yaml.name), (d3_yaml, d3_yaml.name)]:
+        shutil.copy2(a, OUT_DIR / "data" / b)
+    fig, axes = plt.subplots(2, 4, figsize=(16, 8))
+    show_d3 = d3_records["d3train"][:4] + d3_records["hardval"][:2] + d3_records["thard"][:2]
+    for ax, r in zip(axes.flat, show_d3):
+        img = Image.open(D1 / "images" / r["split"] / f"{r['image_id']}.jpg")
+        ax.imshow(draw_boxes(img, [(lb["class_id"], lb["box_xyxy"]) for lb in r["labels"]])); ax.axis("off")
+        ax.set_title(f"{r['image_id']} ({'gray' if r['bg'] is None else r['bg']['file']})", fontsize=8)
+    plt.suptitle("D3 composites with mask-based boxes: D3-train (top), hard-val and T-hard (bottom)"); plt.tight_layout()
+    plt.savefig(OUT_DIR / "figures" / "d3_examples.jpg", dpi=90); plt.show()
+
+# %% [markdown]
 # # Task6 - Fine-tune YOLOv8n on D1-train
 # Transfer learning from COCO-pretrained YOLOv8n (the 80-class head is replaced by a 20-class head). Image size 640, batch 16, up to 100 epochs, early stopping (patience 20) on D1-val, Ultralytics' default augmentation including mosaic. With `M2_TRAIN_AUG=large`, the random zoom range is widened and mosaic is used on half of the batches (`TRAIN_AUG`, Task1); the data stay the same.
 #
 # Checkpoint selection: Ultralytics keeps `best.pt` by its fitness on D1-val, `0.1·mAP@0.5 + 0.9·mAP@0.5:0.95`. The proposal's M2 rule is mAP@0.5:0.95 on D1-val alone; the cell after training prints whether the two rules pick the same epoch.
+#
+# Comparison runs (`M2_ARM=A` or `B`, proposal §7.2): training set D1-train (A) or D1-train 750–1499 + D3-train (B), a fixed budget of 60 epochs without early stopping in both arms, and Ultralytics validates on D1-val and hard-val together (pooled; both sets have 300 images, so this is close to the proposal's equal-weight `val_score`, which is reported separately). `M2_TRAIN_SEED` changes only the training seed, for the three seeds per arm.
 
 # %%
 t0 = time.time()
 model = YOLO(YOLO_WEIGHTS)
-model.train(data=str(data_yaml), epochs=EPOCHS, patience=PATIENCE, imgsz=IMGSZ, batch=BATCH, seed=SEED, deterministic=True,
+# Comparison runs (M2_ARM): the arm's training set, validation on D1-val + hard-val, a fixed budget without early stopping
+train_yaml, epochs, patience = (arm_yaml, ARM_EPOCHS, ARM_EPOCHS + 1) if ARM else (data_yaml, EPOCHS, PATIENCE)
+model.train(data=str(train_yaml), epochs=epochs, patience=patience, imgsz=IMGSZ, batch=BATCH, seed=TRAIN_SEED, deterministic=True,
             device=DEVICE, workers=2, project=str(WORK_DIR / "yolo"), name="d1_yolov8n", exist_ok=True, verbose=False, **TRAIN_AUG)
 TRAIN_MIN = (time.time() - t0) / 60
-print(f"Training augmentation: {TRAIN_AUG_NAME} {TRAIN_AUG or '(Ultralytics defaults)'}")
+print(f"Training augmentation: {TRAIN_AUG_NAME} {TRAIN_AUG or '(Ultralytics defaults)'}"
+      + (f" | arm {ARM}, training seed {TRAIN_SEED}, {epochs} epochs without early stopping" if ARM else ""))
 RUN = Path(model.trainer.save_dir)
 BEST = OUT_DIR / "models" / "d1_yolov8n_best.pt"
 shutil.copy2(RUN / "weights" / "best.pt", BEST)
@@ -689,7 +925,7 @@ plt.tight_layout(); plt.savefig(OUT_DIR / "figures" / "training_curves.png", dpi
 
 # %% [markdown]
 # # Task7 - Confidence threshold on D1-val only
-# The **general threshold** is the value in 0.05, 0.10, …, 0.95 that maximizes macro-F1 over the 20 classes on D1-val (a detection is correct if it has the right class and IoU ≥ 0.5 with a not-yet-matched ground-truth box, highest confidence first). Ties go to the higher threshold. The choice is saved to `selection.json` before the test set is used.
+# The **general threshold** is the value in 0.05, 0.10, …, 0.95 that maximizes macro-F1 over the 20 classes on D1-val (a detection is correct if it has the right class and IoU ≥ 0.5 with a not-yet-matched ground-truth box, highest confidence first). Ties go to the higher threshold. The choice is saved to `selection.json` before the test set is used. In comparison runs (`M2_ARM`), the threshold maximizes the equal-weight average of the macro-F1 on D1-val and on hard-val, and `val_score` = 0.5·mAP@0.5:0.95(D1-val) + 0.5·mAP@0.5:0.95(hard-val) is recorded (proposal §7.2).
 
 # %%
 best_model = YOLO(str(BEST))
@@ -758,10 +994,19 @@ def match(preds, gts, thr):
 
 val_preds, val_gts = predict_split("val")
 sweep = [match(val_preds, val_gts, t) for t in CONF_GRID]
-best_t = max(reversed(sweep), key=lambda m: m["macro_f1"])           # reversed + max → ties go to the higher threshold
+if ARM:                                                   # comparison runs: equal-weight average of D1-val and hard-val macro-F1
+    hv_preds, hv_gts = predict_split("hardval")
+    sweep_hv = [match(hv_preds, hv_gts, t) for t in CONF_GRID]
+    score = [(a["macro_f1"] + b["macro_f1"]) / 2 for a, b in zip(sweep, sweep_hv)]
+else:
+    score = [m["macro_f1"] for m in sweep]
+k_best = max(reversed(range(len(CONF_GRID))), key=lambda k: score[k])   # reversed + max → ties go to the higher threshold
+best_t = sweep[k_best]
 GEN_THR = best_t["threshold"]
 plt.figure(figsize=(6, 3.5))
 plt.plot(CONF_GRID, [m["macro_f1"] for m in sweep], "o-", ms=3, label="macro-F1")
+if ARM:
+    plt.plot(CONF_GRID, [m["macro_f1"] for m in sweep_hv], "s-", ms=3, label="macro-F1 (hard-val)")
 plt.plot(CONF_GRID, [m["precision"] for m in sweep], "--", label="precision"); plt.plot(CONF_GRID, [m["recall"] for m in sweep], "--", label="recall")
 plt.axvline(GEN_THR, color="gray", lw=0.8); plt.xlabel("confidence threshold"); plt.title("D1-val"); plt.legend()
 plt.tight_layout(); plt.savefig(OUT_DIR / "figures" / "threshold_sweep_val.png", dpi=120); plt.show()
@@ -786,15 +1031,27 @@ def single_object_eval(split, conf):
 
 SINGLE_VAL = single_object_eval("val", GEN_THR)
 VAL = dict(map50=float(val_m.box.map50), map50_95=float(val_m.box.map), at_threshold=best_t, single_object=SINGLE_VAL)
-selection = dict(model="YOLOv8n fine-tuned on D1-train", train_aug=TRAIN_AUG_NAME, weights_sha256=BEST_SHA, best_epoch=BEST_EPOCH, epochs_run=EPOCHS_RUN,
-                 checkpoint_rule="Ultralytics best.pt (fitness 0.1·mAP50 + 0.9·mAP50-95 on D1-val)",
-                 general_threshold=GEN_THR, threshold_rule="max macro-F1 over 20 classes on D1-val; grid 0.05–0.95; ties → higher",
+if ARM:
+    hv_m = best_model.val(data=str(d3_yaml), split="val", imgsz=IMGSZ, batch=BATCH, conf=0.001, iou=NMS_IOU, device=DEVICE,
+                          plots=False, verbose=False, project=str(WORK_DIR / "yolo"), name="hardval", exist_ok=True)
+    VAL["hardval"] = dict(map50=float(hv_m.box.map50), map50_95=float(hv_m.box.map), at_threshold=sweep_hv[k_best])
+    VAL["val_score"] = 0.5 * VAL["map50_95"] + 0.5 * VAL["hardval"]["map50_95"]   # proposal §7.2
+selection = dict(model=f"YOLOv8n fine-tuned on {'D1-train' if not ARM else ('arm A: D1-train' if ARM == 'A' else 'arm B: D1-train 750–1499 + D3-train')}",
+                 train_aug=TRAIN_AUG_NAME, arm=ARM or None, train_seed=TRAIN_SEED,
+                 weights_sha256=BEST_SHA, best_epoch=BEST_EPOCH, epochs_run=EPOCHS_RUN,
+                 checkpoint_rule="Ultralytics best.pt (fitness 0.1·mAP50 + 0.9·mAP50-95 on " + ("D1-val + hard-val, pooled)" if ARM else "D1-val)"),
+                 general_threshold=GEN_THR,
+                 threshold_rule=("max of the equal-weight average macro-F1 on D1-val and hard-val" if ARM else "max macro-F1 over 20 classes on D1-val")
+                 + "; grid 0.05–0.95; ties → higher",
                  nms_iou=NMS_IOU, decided_at=datetime.now(timezone.utc).isoformat(), val=VAL)
 (OUT_DIR / "records" / "selection.json").write_text(json.dumps(selection, indent=2), encoding="utf-8")
 print(f"D1-val: mAP@0.5 {VAL['map50']:.4f}, mAP@0.5:0.95 {VAL['map50_95']:.4f}")
 print(f"General threshold = {GEN_THR} → precision {best_t['precision']:.4f}, recall {best_t['recall']:.4f}, macro-F1 {best_t['macro_f1']:.4f} (saved before test)")
 print(f"Single-object val photos ({SINGLE_VAL['n']}): top-1 class correct {SINGLE_VAL['top1_correct']} ({SINGLE_VAL['top1_acc']:.4f}), "
       f"no detection {SINGLE_VAL['no_detection']}")
+if ARM:
+    print(f"hard-val: mAP@0.5 {VAL['hardval']['map50']:.4f}, mAP@0.5:0.95 {VAL['hardval']['map50_95']:.4f}, "
+          f"macro-F1 {VAL['hardval']['at_threshold']['macro_f1']:.4f} | val_score {VAL['val_score']:.4f}")
 
 # %% [markdown]
 # # Task7b - Masks that may cover only part of the object (train and val only)
@@ -897,9 +1154,24 @@ for f in ["confusion_matrix_normalized.png", "PR_curve.png", "BoxPR_curve.png"]:
 with open(OUT_DIR / "records" / "test_run_log.jsonl", "a", encoding="utf-8") as f:
     f.write(json.dumps(dict(time=datetime.now(timezone.utc).isoformat(), weights_sha256=BEST_SHA, set="D1-test",
                             reason="M2 report: evaluate the frozen model after threshold selection on D1-val")) + "\n")
+THARD = None
+if ARM:                                                   # T-hard: hard synthetic scenes on unseen backgrounds
+    th_m = best_model.val(data=str(d3_yaml), split="test", imgsz=IMGSZ, batch=BATCH, conf=0.001, iou=NMS_IOU, device=DEVICE,
+                          plots=False, verbose=False, project=str(WORK_DIR / "yolo"), name="thard", exist_ok=True)
+    th_preds, th_gts = predict_split("thard")
+    THARD = dict(map50=float(th_m.box.map50), map50_95=float(th_m.box.map), at_threshold=match(th_preds, th_gts, GEN_THR))
+    with open(OUT_DIR / "records" / "test_run_log.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps(dict(time=datetime.now(timezone.utc).isoformat(), weights_sha256=BEST_SHA, set="T-hard",
+                                reason=f"D1 vs D1+D3 comparison, arm {ARM}, seed {TRAIN_SEED}: frozen model")) + "\n")
 
 det_rows = [["D1-val", f"{VAL['map50']:.4f}", f"{VAL['map50_95']:.4f}", f"{best_t['precision']:.4f}", f"{best_t['recall']:.4f}", f"{best_t['macro_f1']:.4f}"],
             ["**D1-test**", f"{TEST['map50']:.4f}", f"{TEST['map50_95']:.4f}", f"{TEST_T['precision']:.4f}", f"{TEST_T['recall']:.4f}", f"{TEST_T['macro_f1']:.4f}"]]
+if ARM:
+    hv, th = VAL["hardval"], THARD
+    det_rows.insert(1, ["hard-val", f"{hv['map50']:.4f}", f"{hv['map50_95']:.4f}", f"{hv['at_threshold']['precision']:.4f}",
+                        f"{hv['at_threshold']['recall']:.4f}", f"{hv['at_threshold']['macro_f1']:.4f}"])
+    det_rows.append(["**T-hard**", f"{th['map50']:.4f}", f"{th['map50_95']:.4f}", f"{th['at_threshold']['precision']:.4f}",
+                     f"{th['at_threshold']['recall']:.4f}", f"{th['at_threshold']['macro_f1']:.4f}"])
 det_md = md_table(["set", "mAP@0.5", "mAP@0.5:0.95", f"precision @{GEN_THR}", f"recall @{GEN_THR}", f"macro-F1 @{GEN_THR}"], det_rows)
 pc_md = md_table(["class", "AP@0.5", "AP@0.5:0.95", f"F1 @{GEN_THR}"],
                  [[c, f"{ap50[c]:.3f}", f"{ap5095[c]:.3f}", f"{TEST_T['per_class_f1'][k]:.3f}"] for k, c in enumerate(CLASS_IDS)])
@@ -983,14 +1255,18 @@ env = dict(python=platform.python_version(), torch=torch.__version__, ultralytic
 config = dict(seed=SEED, canvas=CANVAS, grids=GRIDS, objects_per_image=N_OBJ, set_sizes=SET_SIZES, tile_aug=AUG, min_visibility=MIN_VIS,
               min_box_side=MIN_SIDE, max_tries=MAX_TRIES, rembg_model=REMBG_MODEL, mask_qc=MASK_QC, unreviewed_flagged=UNREVIEWED_FLAGGED,
               yolo_weights=YOLO_WEIGHTS, epochs=EPOCHS, patience=PATIENCE, batch=BATCH, imgsz=IMGSZ, nms_iou=NMS_IOU,
-              train_aug=dict(name=TRAIN_AUG_NAME, overrides=TRAIN_AUG), suspect_masks=SUSPECT, smoke=SMOKE)
-rec = dict(run_id=uuid.uuid4().hex, run_tag=RUN_TAG, task="M2 multi-object detection", model="yolov8n", arm="D1-only",
+              train_aug=dict(name=TRAIN_AUG_NAME, overrides=TRAIN_AUG), suspect_masks=SUSPECT, smoke=SMOKE,
+              comparison=dict(arm=ARM, train_seed=TRAIN_SEED, epochs=ARM_EPOCHS, d3_sizes=D3_SIZES, d3_profiles=D3_PROFILES,
+                              backgrounds={g: len(v) for g, v in BGS.items()}) if ARM else None)
+rec = dict(run_id=uuid.uuid4().hex, run_tag=RUN_TAG, task="M2 multi-object detection", model="yolov8n",
+           arm=("A: D1-only" if ARM == "A" else "B: D1+D3") if ARM else "D1-only",
            git_commit=commit, git_dirty=dirty, config=config,
            data=dict(classes_json_sha256=CLASSES_SHA, split_manifest_sha256=MANIFEST_SHA, masks_manifest_sha256=MASKS_SHA,
                      d1_manifest_sha256=DS_SHA, usable_sources=len(SRC) - len(excl), excluded_sources=len(excl),
-                     mask_reviews=len(review), suspect_partial_masks=len(suspects), generation_skips=gen_skips, regeneration_spot_check=f"{spot_ok}/{len(spot)}"),
+                     mask_reviews=len(review), suspect_partial_masks=len(suspects), generation_skips=gen_skips, regeneration_spot_check=f"{spot_ok}/{len(spot)}",
+                     d3_skips=d3_skips or None, d3_regeneration_spot_check=f"{d3_spot_ok}/{len(d3_spot)}" if ARM else None),
            training=dict(minutes=TRAIN_MIN, epochs_run=EPOCHS_RUN, best_epoch=BEST_EPOCH, best_epoch_by_map50_95=BEST_EPOCH_MAP, gpu=GPU_INFO),
-           selection=selection, validation_metrics=VAL, final_test_metrics=dict(d1_test=TEST, single_object_test=SINGLE),
+           selection=selection, validation_metrics=VAL, final_test_metrics=dict(d1_test=TEST, t_hard=THARD, single_object_test=SINGLE),
            environment=env, artifact=dict(path="models/d1_yolov8n_best.pt", sha256=BEST_SHA))
 (OUT_DIR / "records" / "run_yolov8n_d1.json").write_text(json.dumps(rec, indent=2), encoding="utf-8")
 
@@ -1003,7 +1279,11 @@ data_md = md_table(["set", "source split", "images", "objects", "objects / image
     f"Regeneration spot check: {spot_ok}/{len(spot)} identical.\n\n"
     f"## Training\n\nYOLOv8n (COCO-pretrained), {EPOCHS_RUN} epochs (best {BEST_EPOCH}), {TRAIN_MIN:.1f} min on {GPU_INFO}; "
     f"training augmentation: {TRAIN_AUG_NAME} {TRAIN_AUG or '(Ultralytics defaults)'}.\n\n"
-    f"## Detection results\n\n{det_md}\n\nGeneral threshold {GEN_THR} chosen on D1-val.\n\n"
+    + (f"## D1 vs D1+D3 comparison\n\nArm {ARM}, training seed {TRAIN_SEED}, {epochs} epochs without early stopping; "
+       f"backgrounds A {len(BGS['A'])}, B {len(BGS['B'])} (0 = gray canvas). D3 skipped placements: {d3_skips}. "
+       f"val_score (0.5·mAP@0.5:0.95 D1-val + 0.5·hard-val) = {VAL['val_score']:.4f}.\n\n"
+       f"### Training instances per class (arm A vs arm B)\n\n{arm_md}\n\n" if ARM else "")
+    + f"## Detection results\n\n{det_md}\n\nGeneral threshold {GEN_THR} chosen on {'D1-val + hard-val' if ARM else 'D1-val'}.\n\n"
     f"Single-object val photos (large objects, validation): {SINGLE_VAL['top1_correct']}/{SINGLE_VAL['n']} correct, "
     f"{SINGLE_VAL['no_detection']} without detection.\n\n"
     f"Suspect partial masks found on train/val composites: {len(suspects)} (see records/mask_review_suggested.csv).\n\n"

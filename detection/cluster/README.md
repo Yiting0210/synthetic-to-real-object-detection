@@ -78,6 +78,19 @@ Order of runs (compare on D1-val and the single-object val photos only; D1-test 
 
 The first `sam` decision downloads `sam_b.pt` (~375 MB) into `run/`.
 
+## D1 vs D1+D3 comparison (D3 copy-paste)
+
+`M2_ARM` switches the run to the comparison of proposal §7.2: the masks cut the objects out and paste them anywhere on the canvas (D3), and the two arms train on the same objects:
+
+| Arm | Training data | Command |
+|---|---|---|
+| A | D1-train, 1,500 grid images | `M2_ARM=A sbatch m2_job.sbatch` |
+| B | D1-train 750–1499 + 750 D3 images that reuse the objects of D1-train 0–749 | `M2_ARM=B sbatch m2_job.sbatch` |
+
+Both arms: 60 epochs without early stopping; checkpoint and threshold on D1-val + hard-val (300 D3 composites from val photos); final test on D1-test and T-hard (300 harder D3 composites from test photos). For the three seeds per arm add `M2_TRAIN_SEED=1` and `M2_TRAIN_SEED=2` (the data stay the same; only training changes), e.g. `M2_ARM=B M2_TRAIN_SEED=1 sbatch m2_job.sbatch`.
+
+Backgrounds: put indoor photos without any of the 20 objects into `IE7615_project/backgrounds/A/` (training and hard-val) and `IE7615_project/backgrounds/B/` (T-hard only). Without them the cut-outs are pasted on the gray canvas, and the run summary says so. Fix the masks first: D3 pastes exactly the mask pixels.
+
 ## 4. Get the results back
 
 Results are in `IE7615_project/runs/m2_<time>/`, same as on Drive. Download that folder; `M2_results_for_report.md` has the tables for the report, and `demo_examples/`, `models/d1_yolov8n_best.pt`, `records/selection.json` are what the demo needs (`models/` and `demo/examples/` in the repository).
