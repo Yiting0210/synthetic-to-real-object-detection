@@ -98,10 +98,35 @@ The two M2 test sets were generated from different usable source images, so the 
 
 ### M1 conclusions (single-object classification)
 
-1. **Transfer learning is what matters; the three pretrained models are tied.** The from-scratch CNN reaches 0.891 test accuracy, every ImageNet-pretrained model 0.993–1.000. On validation (303 images) ResNet-50, EfficientNet-B0 and MobileNetV2 lie within each other's 95% Wilson intervals, so the difference between them is not measurable at this sample size. MobileNetV2 was chosen by the rule fixed before testing (fewest parameters among the competitive models): 2.28 M parameters, 10× fewer than ResNet-50, test accuracy 0.993 with 2 errors in 303 (OBJ123→OBJ777, OBJ004→OBJ007).
-2. **The accuracy is in-distribution.** Each class was photographed by one person in one setting, and some classes carry framing cues (borders, plain backgrounds). The grouped split removes near-duplicate leakage, but test images still come from the same sessions as training, so ~99% does not mean the model works on new photos of these objects.
-3. **The 20-class model cannot say "none of these".** It always returns one of the 20 IDs. Adding an `OTHERS` class (100 photos of 31 everyday kinds; same recipe) keeps known accuracy (302/303 on test) and rejects 12 of 15 OTHERS test photos, but only 15 of 36 photos of 18 kinds never seen in training. A confidence threshold chosen on validation (T = 0.50) raises this to 21/36 at the cost of 1 more known image rejected; this is what the demo uses.
-4. **The rejection rule matters less than the training data.** Five rules were compared, the threshold of each set on validation (at most 1% of known images rejected): softmax threshold or class-prototype (cosine) distance on the 20-class model, and `OTHERS` alone, `OTHERS` + softmax threshold, `OTHERS` + prototype distance on the 21-class model. They reject 15–25 of 36 unseen photos with AUROC 0.980–0.991 and overlapping intervals; `OTHERS` alone is the weakest, `OTHERS` + prototype distance the best (25/36). Objects that look like a course object (e.g. sunglasses) are accepted by all five, so the next improvement would come from look-alike negative examples, not another decision rule. The unseen set was used to compare the rules, so the best number is optimistic; an unbiased figure needs a fresh unseen set. Details: `classification/results_openset/`.
+1. **Transfer learning is what matters; the three pretrained models are tied.**
+   - From-scratch CNN: 0.891 test accuracy; ImageNet-pretrained models: 0.993–1.000.
+   - On validation (303 images), ResNet-50, EfficientNet-B0 and MobileNetV2 lie within each other's 95% Wilson intervals: the difference is not measurable at this sample size.
+   - MobileNetV2 was chosen by the rule fixed before testing (fewest parameters among the competitive models): 2.28 M parameters, 10× fewer than ResNet-50.
+   - Test accuracy 0.993: 2 errors in 303 (OBJ123→OBJ777, OBJ004→OBJ007).
+2. **The accuracy is in-distribution.**
+   - Each class was photographed by one person in one setting; some classes carry framing cues (borders, plain backgrounds).
+   - The grouped split removes near-duplicate leakage, but test images come from the same sessions as training.
+   - So ~99% does not show that the model works on new photos of these objects.
+3. **The 20-class model cannot say "none of these".**
+   - It always returns one of the 20 IDs.
+   - Adding an `OTHERS` class (100 photos of 31 everyday kinds, same recipe) keeps known accuracy (302/303 on test).
+   - It rejects 12 of 15 OTHERS test photos, but only 15 of 36 photos of 18 kinds never seen in training.
+   - A confidence threshold chosen on validation (T = 0.50) raises this to 21/36, with 1 more known image rejected; this is what the demo uses.
+4. **The rejection rule matters less than the training data.**
+   - Five rules compared, each threshold set on validation (at most 1% of known images rejected); see the table below.
+   - All reject 15–25 of 36 unseen photos, AUROC 0.980–0.991, with overlapping intervals.
+   - Objects that look like a course object (e.g. sunglasses) are accepted by all five: the next improvement would come from look-alike negative examples, not another rule.
+   - The unseen set was used to compare the rules, so the best number is optimistic; an unbiased figure needs a fresh unseen set.
+
+| Model | Rejection rule | Known test correct | Unseen rejected (of 36) | AUROC |
+|---|---|---|---|---|
+| 20 classes | Softmax threshold | 300/303 | 23 | 0.984 |
+| 20 classes | Prototype (cosine) distance | 300/303 | 24 | 0.987 |
+| 21 classes | `OTHERS` only | 302/303 | 15 | 0.980 |
+| 21 classes | `OTHERS` + softmax threshold | 301/303 | 21 | 0.985 |
+| 21 classes | `OTHERS` + prototype distance | 301/303 | 25 | 0.991 |
+
+Details: `classification/results_openset/`.
 
 ## Running the project
 
