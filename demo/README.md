@@ -65,6 +65,11 @@ Tested on Oct 29, 2026 (classifier, 8/8 correct on `examples/single`, ~70 ms per
 ## Live demo script (about 3 minutes)
 
 1. **Single object:** click an example (e.g. `OBJ004_0072`, the stop sign) → ID with top-3 probabilities.
+   With the 21-class model and its threshold in `../models/` (see `../models/README.md`), a photo of something that is not one of the 20 objects can be answered with "Not one of the 20 objects". Note: `OBJ002_0026` is then rejected too (its top probability, 0.48, is below the threshold 0.50).
+   The tab then has a **rejection threshold** slider (default 0.50, chosen on validation; 0 = off): move it to show the trade-off live, e.g. `OBJ002_0026` becomes `OBJ002` at 0 and an unseen object is rejected at higher values while more course images are rejected too. Examples always run at the validation value first. Reported numbers use 0.50 only.
+   Two examples are objects of kinds never trained on (sources in `examples/single/ATTRIBUTION.md`):
+   - `unseen_power_outlet_02`: correctly answered "Not one of the 20 objects" (OTHERS 99.1%).
+   - `unseen_sunglasses_02`: a known failure, predicted as `OBJ201` (the glasses) at 85.7%; even the slider at 0.85 does not reject it. Use it to show the limit: objects that look like a course object are not rejected.
 2. **Multi-object:** every object is identified in `d1_test_00025`, `00128`, `00129`, `00193`, `00209`, `00227` and `00255`. Point out the boxes and the JSON (ID, confidence, `x0 y0 x1 y1`). Avoid `00026` (the small OBJ001 bottle is missed and one extra OBJ201 box appears), or use it on purpose to show a known limit.
 3. **Threshold:** move the slider down to show extra low-confidence boxes, back up to the value chosen on validation.
 4. **Outside the training distribution (optional):** a real phone photo of OBJ011 on a cluttered desk. Present it as a case study, not as a measured result (T-real is not built yet).

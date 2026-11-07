@@ -8,6 +8,16 @@ One folder for both models, read by `demo/predict.py` and `demo/demo_app.py`. Th
 | `selection.json` | Detector threshold chosen on D1-val: 0.55 | yes |
 | `mobilenetv2.keras` | M1 classifier (MobileNetV2), selected on validation; Drive `IE7615_project/runs/m1_20261018_022316/models/` | no |
 | `d1_yolov8n_best.pt` | Retrained detector (YOLOv8n), best epoch 22 of 42 (16 min), cluster run `m2_20261103_225708`. sha256 `68dc75dcbb11…` | no |
+| `mobilenetv2_others.keras` | Optional 21-class classifier (20 course IDs + `OTHERS`), Colab run `m1o_20261107_113839`. sha256 `9deb2081…`. When present, the demo uses it instead of `mobilenetv2.keras` | no |
+| `classes_with_others.json` | Class map of the 21-class model (0–19 as in `classes.json`, 20 = `OTHERS`). sha256 `83d20a48…` | yes |
+| `others_threshold.json` | Confidence threshold for the 21-class model, chosen on validation (T = 0.50): a course ID below T becomes `OTHERS` | yes |
+
+## 21-class classifier with OTHERS
+
+Trained with `../classification/m1_others.ipynb` (same recipe as the M1 MobileNetV2, plus 100 OTHERS photos). On the 303 M1 test images:
+known accuracy 0.9967 (20-class model 0.9934), 1 image rejected as OTHERS; 12 of 15 OTHERS test photos and 15 of 36 unseen-kind photos rejected.
+With the threshold T = 0.50 (`../classification/src/others_threshold.py`): known accuracy 0.9934, 2 rejected; 13 of 15 OTHERS test photos and 21 of 36 unseen-kind photos rejected.
+Results: `../classification/results_others/`. Remove the three files above to go back to the 20-class demo.
 
 ## Retrained detector (after mask review)
 

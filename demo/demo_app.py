@@ -15,7 +15,7 @@ from pathlib import Path
 import gradio as gr
 from PIL import Image
 
-from predict import Classifier, Detector, draw
+from predict import Classifier, Detector, draw, classifier_available
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--models-dir", type=Path, default=Path(__file__).resolve().parent.parent / "models")
@@ -23,7 +23,7 @@ ap.add_argument("--examples", type=Path, default=Path(__file__).resolve().parent
 ap.add_argument("--port", type=int, default=7860)
 args = ap.parse_args()
 
-classifier = Classifier(args.models_dir) if (args.models_dir / "mobilenetv2.keras").exists() else None
+classifier = Classifier(args.models_dir) if classifier_available(args.models_dir) else None   # 21-class model with OTHERS if present
 detector = Detector(args.models_dir) if (args.models_dir / "d1_yolov8n_best.pt").exists() else None
 
 # Warm-up: the first prediction is slow (model initialization), so do it before the demo starts
@@ -35,6 +35,9 @@ if detector:
 
 # Test results reported in M1 and M2 (shown on the page; not recomputed here)
 M1_RESULT = "test accuracy 0.993"
+# The 21-class model (with OTHERS), when it is the one loaded: accuracy on the same 303 test images at the validation threshold
+if classifier and classifier.has_others:
+    M1_RESULT = "+ OTHERS · test accuracy 0.993 · rejects 21 of 36 unseen-kind photos" if classifier.threshold else "+ OTHERS · test accuracy 0.997"
 M2_RESULT = "D1-test mAP@0.5 0.928"   # retrained detector (models/, see detection/results); the submitted M2 model had 0.908
 REPO_URL = "https://github.com/Yiting0210/synthetic-to-real-object-detection"   # header GitHub icon; inactive if empty
 
@@ -153,18 +156,37 @@ EMPTY_PROB = prob_html([])
 
 
 def examples(sub):
+    """Example images of one tab. If the folder has an order.txt (one file name per line), those come first in that
+    order; any other images follow sorted by name."""
     d = args.examples / sub
-    return [[str(p)] for p in sorted(d.glob("*")) if p.suffix.lower() in {".jpg", ".jpeg", ".png"}] if d.exists() else []
+    if not d.exists():
+        return []
+    files = {p.name: p for p in d.glob("*") if p.suffix.lower() in {".jpg", ".jpeg", ".png"}}
+    order_file = d / "order.txt"
+    listed = [n.strip() for n in order_file.read_text(encoding="utf-8").splitlines()] if order_file.exists() else []
+    listed = [n for n in listed if n in files]
+    return [[str(files[n])] for n in listed + sorted(n for n in files if n not in listed)]
 
 
 # ---------------------------------------------------------------- callbacks (inference via predict.py, unchanged)
-def run_single(image):
+def run_single(image, thr=None):
+    """thr: value of the rejection-threshold slider (21-class model only); None = the validation threshold."""
     if image is None:
         return EMPTY_SINGLE, EMPTY_PROB, {}
     t = time.perf_counter()
-    out = classifier(image.convert("RGB"))
+    out = classifier(image.convert("RGB"), threshold=thr)
     ms = (time.perf_counter() - t) * 1000
-    card = summary_html("Predicted object ID", out["object_id"], f"Confidence {pct(out['confidence'], 1)} · MobileNetV2 · {ms:.0f} ms")
+    model_name = "MobileNetV2 + OTHERS" if classifier.has_others else "MobileNetV2"
+    if out.get("threshold") is not None:
+        model_name += f" · threshold {out['threshold']:.2f}" if out["threshold"] > 0 else " · no threshold"
+    if out["in_course_classes"]:
+        card = summary_html("Predicted object ID", out["object_id"], f"Confidence {pct(out['confidence'], 1)} · {model_name} · {ms:.0f} ms")
+    elif out.get("rejected_by_threshold"):
+        best = out["top_k"][0]["object_id"]
+        card = summary_html("Not one of the 20 objects", "OTHERS",
+                            f"Most likely {best} at {pct(out['confidence'], 1)}, below the threshold · {model_name} · {ms:.0f} ms")
+    else:
+        card = summary_html("Not one of the 20 objects", "OTHERS", f"Confidence {pct(out['confidence'], 1)} · {model_name} · {ms:.0f} ms")
     return card, prob_html(out["top_k"]), out
 
 
@@ -426,13 +448,19 @@ with gr.Blocks(title="Lab-to-Real Object ID", theme=theme, css=CSS, js=JS, fill_
     with gr.Tabs(elem_id="task-tabs"):
         with gr.Tab("Single object → ID"):
             if classifier is None:
-                gr.Markdown(f"⚠️ `mobilenetv2.keras` not found in `{args.models_dir}`.")
+                gr.Markdown(f"⚠️ No classifier (`mobilenetv2.keras` or `mobilenetv2_others.keras`) found in `{args.models_dir}`.")
             else:
                 with gr.Row(elem_classes="workspace", equal_height=False):
                     with gr.Column(elem_classes="img-card", min_width=0):
                         s_in = gr.Image(type="pil", label="Single-object image", sources=["upload", "webcam"], elem_id="s-img",
                                         show_download_button=False)
                         gr.HTML(toolbar_html("s-img", "s-examples"), elem_classes="toolbar-block")
+                        s_thr = None
+                        if classifier.has_others and classifier.threshold is not None:
+                            # 21-class model: below this probability a course ID becomes OTHERS (0 = threshold off)
+                            with gr.Column(elem_classes="slider-wrap"):
+                                s_thr = gr.Slider(0.0, 0.95, value=classifier.threshold, step=0.05,
+                                                  label=f"Rejection threshold (chosen on validation: {classifier.threshold}; 0 = off)")
                         with gr.Column(elem_classes="btn-wrap"):
                             s_btn = gr.Button("✦ Identify", elem_classes="primary-btn")
                     with gr.Column(elem_classes="right-col", min_width=0):
@@ -441,12 +469,16 @@ with gr.Blocks(title="Lab-to-Real Object ID", theme=theme, css=CSS, js=JS, fill_
                         with gr.Accordion("Raw output (JSON)", open=False, elem_classes="json-acc"):
                             s_json = gr.JSON(show_label=False)
                 s_outs = [s_card, s_prob, s_json]
-                s_btn.click(run_single, s_in, s_outs)
-                s_in.upload(run_single, s_in, s_outs)
+                s_ins = [s_in, s_thr] if s_thr is not None else [s_in]
+                s_btn.click(run_single, s_ins, s_outs)
+                s_in.upload(run_single, s_ins, s_outs)
+                if s_thr is not None:     # moving the slider re-runs on the current image (only the last value while dragging)
+                    s_thr.change(run_single, s_ins, s_outs, trigger_mode="always_last")
                 s_in.clear(lambda: (EMPTY_SINGLE, EMPTY_PROB, {}), None, s_outs)
                 if examples("single"):
                     with gr.Column(elem_classes="ex-card", elem_id="s-examples"):
                         gr.HTML(card_head("image", "Examples", "Held-out test images"))
+                        # examples run at the validation threshold, like the detector examples; the slider then adjusts
                         gr.Examples(examples("single"), s_in, s_outs, fn=run_single, run_on_click=True, cache_examples=False,
                                     examples_per_page=20)
 

@@ -5,6 +5,11 @@ Models (copied from the M1 / M2 run folders on Drive into one folder, default ..
     mobilenetv2.keras     M1 classifier selected on validation (preprocessing is built into the model)
     d1_yolov8n_best.pt    M2 detector
     selection.json        M2 selection record; its general_threshold is the default confidence threshold
+Optional (M1 extension with an OTHERS class, classification/m1_others.ipynb); used instead of mobilenetv2.keras when both are present:
+    mobilenetv2_others.keras    21-class classifier (the 20 course IDs + OTHERS = not one of the 20 objects)
+    classes_with_others.json    its class map (0–19 as in classes.json, 20 = OTHERS)
+    others_threshold.json       confidence threshold T chosen on validation: a course ID is returned only if its
+                                probability is at least T, otherwise OTHERS (classification/src/others_threshold.py)
 
 Usage:
     python predict.py single path/to/image.jpg
@@ -22,6 +27,10 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageOps
 
 CLASSIFIER_FILE = "mobilenetv2.keras"
+OTHERS_CLASSIFIER_FILE = "mobilenetv2_others.keras"     # optional 21-class classifier
+OTHERS_CLASSES_FILE = "classes_with_others.json"
+OTHERS_THRESHOLD_FILE = "others_threshold.json"        # optional; used only with the 21-class classifier
+OTHERS_ID = "OTHERS"
 DETECTOR_FILE = "d1_yolov8n_best.pt"
 CLS_SIZE = 224          # M1 input size
 DET_SIZE = 640          # M2 input size
@@ -29,9 +38,14 @@ NMS_IOU = 0.7           # same as M2
 DEFAULT_CONF = 0.25     # used only if selection.json is missing
 
 
-def load_classes(models_dir):
-    m = json.loads((Path(models_dir) / "classes.json").read_text(encoding="utf-8"))
+def load_classes(models_dir, file="classes.json"):
+    m = json.loads((Path(models_dir) / file).read_text(encoding="utf-8"))
     return {int(k): v for k, v in m.items()}
+
+
+def classifier_available(models_dir):
+    d = Path(models_dir)
+    return (d / CLASSIFIER_FILE).exists() or ((d / OTHERS_CLASSIFIER_FILE).exists() and (d / OTHERS_CLASSES_FILE).exists())
 
 
 def load_image(path):
@@ -44,7 +58,7 @@ class Classifier:
     """M1 Keras classifier. Same preprocessing as M1: resize with padding to 224×224, RGB 0–255;
     the model-specific scaling is the model's own first layer."""
 
-    def __init__(self, models_dir, file=CLASSIFIER_FILE):
+    def __init__(self, models_dir, file=None):
         import keras
 
         @keras.saving.register_keras_serializable(package="m1")
@@ -55,19 +69,43 @@ class Classifier:
 
         import tensorflow as tf
         self.tf = tf
-        self.model = keras.models.load_model(Path(models_dir) / file, compile=False)
-        self.classes = load_classes(models_dir)
+        d = Path(models_dir)
+        if file is None:     # prefer the 21-class model (with OTHERS) when it and its class map are present
+            file = OTHERS_CLASSIFIER_FILE if (d / OTHERS_CLASSIFIER_FILE).exists() and (d / OTHERS_CLASSES_FILE).exists() else CLASSIFIER_FILE
+        self.model = keras.models.load_model(d / file, compile=False)
+        self.classes = load_classes(d, OTHERS_CLASSES_FILE if file == OTHERS_CLASSIFIER_FILE else "classes.json")
+        n_out = self.model.output_shape[-1]
+        if n_out != len(self.classes):
+            raise ValueError(f"{file} has {n_out} outputs but its class map has {len(self.classes)} classes.")
+        self.has_others = OTHERS_ID in self.classes.values()
+        thr = d / OTHERS_THRESHOLD_FILE
+        self.threshold = json.loads(thr.read_text(encoding="utf-8"))["T"] if self.has_others and thr.exists() else None
         self.version = file
 
-    def __call__(self, image, top_k=3):
+    def __call__(self, image, top_k=3, threshold=None):
+        """threshold: override of the validation threshold for this call (21-class model only; 0 = no threshold)."""
         tf = self.tf
+        if self.has_others and image.width != image.height:
+            # The 21-class model saw its OTHERS photos as central square crops (no padding); do the same here,
+            # so a padded phone photo does not show black borders the OTHERS class never had. Square images are unchanged.
+            s = min(image.size)
+            left, top_ = (image.width - s) // 2, (image.height - s) // 2
+            image = image.crop((left, top_, left + s, top_ + s))
         x = tf.image.resize_with_pad(tf.cast(np.asarray(image), tf.float32), CLS_SIZE, CLS_SIZE)
         x = tf.clip_by_value(tf.round(x), 0, 255)[None]
         p = self.model.predict(x, verbose=0)[0]
         top = np.argsort(p)[::-1][:top_k]
-        return dict(object_id=self.classes[int(top[0])], confidence=round(float(p[top[0]]), 4),
-                    top_k=[dict(object_id=self.classes[int(k)], probability=round(float(p[k]), 4)) for k in top],
-                    model=self.version)
+        best = self.classes[int(top[0])]
+        # Threshold (21-class model only): a course ID below T is not trusted, the answer becomes OTHERS
+        t = (self.threshold if threshold is None else threshold) if self.has_others else None
+        below = t is not None and best != OTHERS_ID and p[top[0]] < t
+        out = dict(object_id=OTHERS_ID if below else best, confidence=round(float(p[top[0]]), 4),
+                   in_course_classes=not below and best != OTHERS_ID,   # False = not one of the 20 objects
+                   top_k=[dict(object_id=self.classes[int(k)], probability=round(float(p[k]), 4)) for k in top],
+                   model=self.version)
+        if t is not None:
+            out.update(threshold=t, rejected_by_threshold=bool(below))
+        return out
 
 
 class Detector:

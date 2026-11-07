@@ -1,0 +1,12 @@
+{
+  "rule": "course ID only if its probability >= T, else OTHERS; T = largest value in 0.50..0.99 with validation false rejection <= 1%",
+  "T": 0.5,
+  "chosen_on": "validation",
+  "validation": {
+    "t": 0.5,
+    "val_false_rejection": 0.009900990099009901,
+    "val_known_acc": 0.9834983498349835,
+    "val_others_recall": 0.8666666666666667
+  },
+  "model_sha256_prefix": "9deb2081"
+}
