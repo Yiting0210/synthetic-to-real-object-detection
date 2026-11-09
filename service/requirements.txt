@@ -1,0 +1,8 @@
+# Inference service runtime (CPU only). torch / torchvision are installed first from the PyTorch CPU index (see Dockerfile).
+ultralytics==8.4.192
+fastapi==0.162.0
+uvicorn==0.54.0
+python-multipart==0.0.32
+pi-heif==1.4.0     # ultralytics patches PIL.Image.open to use it (HEIC phone photos)
+pillow
+numpy

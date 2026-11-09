@@ -18,6 +18,9 @@ This project compares grid concatenation with mask-based copy-paste training dat
 | `detection/results/` | Results of the current (retrained) detector run: `README.md` (tables), `figures/`, `records/`; `data/` holds the mask review, mask and composite manifests and the per-composite generation records |
 | `models/` | Class map and detector threshold shared by both models; the trained weights go here (not in git), see `models/README.md` |
 | `demo/` | `predict.py` (single image → ID; multi-object image → IDs and boxes) and `demo_app.py` (local Gradio demo) with example images; see `demo/README.md` |
+| `tools/` | MLflow tooling: `import_runs.py` (run records → local MLflow store), `register_models.py`, `export_bundle.py`, `rollback_demo.py`; see [MLOps](#mlops-tracking-registry-and-inference-service) |
+| `service/` | FastAPI inference service (`POST /detect`, `GET /health`), pytest tests and a CPU-only Dockerfile |
+| `mlops/` | Local MLflow store (not in git) plus `run_id_map.csv` and `rollback_demo.log` |
 
 Model versions are marked with git tags per component, named `<component>-v<major>.<minor>` (each tag is a snapshot of the whole repository):
 
@@ -134,7 +137,88 @@ Details: `classification/results_openset/`.
 - **Detection (M2):** on the cluster, follow `detection/cluster/README.md` (Slurm job running `detection/src/m2_detection.py`); on Colab, convert the script with `detection/src/percent2ipynb.py` or use the notebook under the tag `detection-v1.0`.
 - **Demo (M3, local CPU):** put the two weight files into `models/` and follow `demo/README.md`; the demo runs at `http://127.0.0.1:7860` on the local machine.
 
-Docker and API instructions will accompany those implementations.
+## MLOps: tracking, registry and inference service
+
+All commands run from the repository root in a Python 3.11 environment with `ultralytics`, `mlflow`, `fastapi`, `uvicorn` and `pytest`. The run folders under `detection/cluster/IE7615_project/runs/` (weights, manifests) are local and not in git.
+
+**Experiment tracking (MLflow, no retraining).** `tools/import_runs.py` reads the existing run records and logs them into a SQLite-backed MLflow store in `mlops/` (`mlops/mlflow.db`, artifacts in `mlops/mlartifacts/`; both gitignored):
+
+- **Experiments:** `M1-classification` (4 classifiers), `openset-rejection` (1 parent run with 6 method runs) and `M2-detection` (arm A/B × seeds 42/1/2).
+- **Each run logs:**
+  - params: full config, seed, arm and Ultralytics train args
+  - metrics: `val.*` (D1-val, hard-val), `test.*` (D1-test, T-hard, real photos), and per-epoch `train/*` curves
+  - checksums: as recorded, and recomputed from the manifests, with a match tag
+  - artifacts: reports, figures, records, and the model folder (weights, `classes.json`, `serving.json`, `MODEL_CARD.md`)
+- **Run IDs:** the original run ID is kept as the tag `source_run_id`, and `mlops/run_id_map.csv` maps it to the MLflow run ID. Re-running skips runs already imported (`--force` re-imports them).
+
+```bash
+python tools/import_runs.py
+```
+
+```bash
+mlflow ui --backend-store-uri sqlite:///mlops/mlflow.db --port 5000
+```
+
+**Model registry and rollback.**
+
+- `tools/register_models.py` registers the arm A and arm B seed-42 detectors as versions 1 and 2 of `lab2real-detector`. Each version is tagged with the class-map, weights and manifest checksums, preprocessing, threshold, NMS and runtime.
+- Aliases: `champion` is the version to serve; `previous` is the last good one.
+- `tools/export_bundle.py --alias champion` resolves the alias to a version number. It writes `model_bundles/lab2real-detector-v<N>/` with the files and a `bundle.json` holding the version, the source run and the SHA-256 of every file.
+- `tools/rollback_demo.py`:
+  - promotes B and serves it, from the bundle and by alias;
+  - moves `champion` back to A and restarts the service;
+  - checks that `/health` and `/detect` now report version 1.
+- The output is in [`mlops/rollback_demo.log`](mlops/rollback_demo.log). The script leaves `champion` on version 1 (arm A).
+
+```bash
+python tools/register_models.py
+```
+
+```bash
+python tools/rollback_demo.py
+```
+
+**Inference service.** `service/app.py` (FastAPI):
+
+- `POST /detect` takes a multipart `file` (image) and an optional `conf` query. It returns class IDs, course IDs, confidences and boxes `[x1, y1, x2, y2]` in pixels of the uploaded image after EXIF rotation, plus the model version.
+- `GET /health` reports readiness, the model version and its source.
+- **Model selection** (first one set wins):
+  - `MODEL_BUNDLE`: an exported bundle; checksums are verified at startup.
+  - `MODEL_ALIAS`: resolved in the local registry at startup.
+  - `MODEL_PATH`: plain weights; also the fallback when the registry cannot be read.
+- The service only reports ready after the model loads and passes a self-check inference.
+
+```bash
+MODEL_ALIAS=champion uvicorn service.app:app --port 8000
+```
+
+```bash
+curl -F "file=@detection/real_multi/images/IMG_2291.jpg" http://127.0.0.1:8000/detect
+```
+
+**Tests.** `pytest` (config in `pytest.ini`) runs `service/tests/` on fixed photos from `detection/real_multi/images` against their hand-drawn labels. The tests cover:
+
+- original-coordinate boxes, EXIF rotation and empty scenes
+- invalid or corrupt images, class-map mismatch and a missing model
+- tampered bundles, alias resolution and the path fallback
+
+```bash
+pytest
+```
+
+**Docker (CPU only).** The image holds the code only. The model bundle is mounted read-only at `/model` (default `MODEL_BUNDLE=/model`):
+
+```bash
+docker build -t lab2real-detector:1.0 service
+```
+
+```bash
+docker run --rm -p 8000:8000 -v "$PWD/model_bundles/lab2real-detector-v2:/model:ro" lab2real-detector:1.0
+```
+
+- The image is about 1.6 GB (CPU-only PyTorch and Ultralytics).
+- The last section of `mlops/rollback_demo.log` records the Docker check: each bundle was mounted (v2, then v1) and `/detect` was called with curl. `/health` was ready within about 9 s of container start and reported the mounted version, and a non-image upload returned HTTP 400.
+- `rollback_demo.py` rewrites the log, so rerunning it removes that Docker section.
 
 ## References
 

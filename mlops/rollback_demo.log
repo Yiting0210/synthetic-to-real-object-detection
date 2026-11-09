@@ -1,0 +1,36 @@
+[23:08:31] Rollback demo for registered model lab2real-detector (store sqlite:///mlops/mlflow.db)
+[23:08:31] versions: arm A (D1) = v1, arm B (D1+D3) = v2; aliases before: {'champion': 1}
+
+[23:08:31] STEP 1 - promote arm B: champion → v2, previous → v1
+[23:08:31] aliases now: {'champion': 2, 'previous': 1}
+[23:08:31] exported champion → model_bundles/lab2real-detector-v2 (version 2)
+[23:08:31] serve B bundle: start service (MODEL_BUNDLE=model_bundles/lab2real-detector-v2)
+[23:09:01]   ready in 29.6 s (process start → /health 200; model load + self-check 24.2 s)
+[23:09:01]   /health: model lab2real-detector version 2 (arm B, seed 42), source=bundle, threshold 0.7
+[23:09:01]   /detect IMG_2291.jpg: version 2, 2 detections [OBJ011 0.96, OBJ002 0.88]
+[23:09:01] serve by alias: start service (MODEL_ALIAS=champion)
+[23:09:50]   ready in 48.3 s (process start → /health 200; model load + self-check 43.9 s)
+[23:09:50]   /health: model lab2real-detector version 2 (arm B, seed 42), source=registry, threshold 0.7
+[23:09:50]   /detect IMG_2291.jpg: version 2, 2 detections [OBJ011 0.96, OBJ002 0.88]
+
+[23:09:50] STEP 2 - rollback: champion → v1, previous → v2
+[23:09:50] aliases now: {'champion': 1, 'previous': 2}
+[23:09:51] exported champion → model_bundles/lab2real-detector-v1 (version 1)
+[23:09:51] restart on A bundle: start service (MODEL_BUNDLE=model_bundles/lab2real-detector-v1)
+[23:10:20]   ready in 29.9 s (process start → /health 200; model load + self-check 24.3 s)
+[23:10:20]   /health: model lab2real-detector version 1 (arm A, seed 42), source=bundle, threshold 0.15
+[23:10:21]   /detect IMG_2291.jpg: version 1, 2 detections [OBJ011 0.94, OBJ201 0.16]
+[23:10:21] serve by alias: start service (MODEL_ALIAS=champion)
+[23:11:14]   ready in 52.7 s (process start → /health 200; model load + self-check 46.8 s)
+[23:11:14]   /health: model lab2real-detector version 1 (arm A, seed 42), source=registry, threshold 0.15
+[23:11:14]   /detect IMG_2291.jpg: version 1, 2 detections [OBJ011 0.94, OBJ201 0.16]
+
+[23:11:14] RESULT: rollback OK. Before: champion = v2 (arm B, threshold 0.7). After: champion = v1 (arm A, threshold 0.15); the restarted service reports version 1 in /health and /detect; time to ready after rollback 29.9 s.
+
+DOCKER CHECK - image lab2real-detector:1.0 (CPU), bundle mounted read-only at /model
+docker run -v model_bundles/lab2real-detector-v2:/model:ro -> ready in 8.9 s (container start -> /health 200); /health version 2 (arm B), threshold 0.7
+  curl /detect IMG_2291.jpg (1280x960): version 2, 2 detections: OBJ011 0.96 [673.2, 210.2, 1205.1, 724.1]; OBJ002 0.88 [181.5, 287.2, 670.6, 754.1]
+  curl /detect README.md (not an image): HTTP 400
+docker run -v model_bundles/lab2real-detector-v1:/model:ro -> ready in 9.3 s (container start -> /health 200); /health version 1 (arm A), threshold 0.15
+  curl /detect IMG_2291.jpg (1280x960): version 1, 2 detections: OBJ011 0.94 [673.7, 206.9, 1262.8, 720.9]; OBJ201 0.16 [0.0, 458.5, 231.2, 719.8]
+  curl /detect README.md (not an image): HTTP 400
