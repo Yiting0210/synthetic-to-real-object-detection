@@ -1,0 +1,35 @@
+# Local tools in one Python 3.11 environment (CPU): real-photo labeling and evaluation, ablation summary,
+# mask review, MLflow tracking and registry, FastAPI service and its tests, and the demo.
+# Versions are the ones the reported results were checked with (conda env ie7615-demo, Windows 11).
+# Install PyTorch CPU first:
+#   pip install torch==2.15.0 torchvision==0.29.2 --index-url https://download.pytorch.org/whl/cpu
+#   pip install -r requirements-local.txt
+# The cluster training job has its own environment: detection/cluster/setup_env.sh.
+
+# detection pipeline (smoke runs), evaluation, review tools
+ultralytics==8.4.192
+numpy==2.4.6
+pandas==2.3.3
+opencv-python==5.0.0.93
+pillow==11.3.0
+pillow-heif==1.8.1       # convert iPhone HEIC photos to JPG
+matplotlib==3.11.2
+scipy==1.17.1
+PyYAML==6.0.3
+ipython==9.18.1          # m2_detection.py uses IPython.display for its tables
+
+# experiment tracking and model registry
+mlflow==3.18.0
+
+# inference service and tests
+fastapi==0.162.0
+uvicorn==0.54.0
+python-multipart==0.0.32
+httpx==0.28.1
+requests==2.34.2
+pytest==9.2.0
+
+# demo (classifier + Gradio page)
+tensorflow==2.21.0
+keras==3.15.1
+gradio==5.50.0

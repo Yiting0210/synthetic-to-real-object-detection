@@ -14,7 +14,7 @@ This project compares grid concatenation with mask-based copy-paste training dat
 | --- | --- |
 | `classification/` | `notebooks/` (M1 classifiers, OTHERS class; executed on Colab T4), `src/` (OTHERS training, rejection methods), `results/` (`m1/`, `others/`, `openset/`) |
 | `detection/src/` | `m2_detection.py` (masks, D1 grid and D3 copy-paste composites, YOLOv8n training, evaluation; Colab notebook or cluster script), mask review tools (`review_masks.py`, `sam_masks.py`, `export_masks_for_cluster.py`), real-photo tools (`label_real_photos.py`, `eval_real_photos.py`) and `summarize_ablation.py` |
-| `detection/data/` | `masks/mask_review.csv` (review decisions used by the current runs) and `real_photos/` (29 phone photos with hand-drawn boxes) |
+| `detection/data/` | `masks/mask_review.csv` (mask review decisions; `sam` rows keep their boxes) and `real_photos/` (29 phone photos with hand-drawn boxes) |
 | `detection/results/` | `ablation/` (arm A/B/C × 3 seeds, generated from the run reports), `real_photos/` (all nine models on the real photos), `archive/` (earlier single run) |
 | `detection/cluster/` | Slurm job and environment setup for the Explorer cluster |
 | `models/` | Class maps and the detector selection record exported from the registry `champion`; trained weights go here (not in git), see `models/README.md` |
@@ -145,11 +145,46 @@ Mean over training seeds 42, 1 and 2; full table: [`detection/results/ablation/`
 
 Details: `classification/results/openset/`.
 
-## Running the project
+## Data
 
-- **Classification (M1):** open `classification/notebooks/m1_classification.ipynb` in Colab with a T4 GPU, add a Drive shortcut to the course data folder, and run all cells; outputs are written to `IE7615_project/runs/` on Drive.
-- **Detection (M2):** on the cluster, follow `detection/cluster/README.md` (Slurm job running `detection/src/m2_detection.py`); on Colab, convert the script with `detection/src/percent2ipynb.py` or use the notebook under the tag `detection-v1.0`.
-- **Demo (M3, local CPU):** put the two weight files into `models/` and follow `demo/README.md`; the demo runs at `http://127.0.0.1:7860` on the local machine.
+The course images are not in the repository: they were taken by the course participants and are shared through the course Google Drive. What is in git is enough to check that the same images are used:
+
+| What | Where | In git |
+|---|---|---|
+| 20 folders `images_OBJxxx`, 2,022 single-object photos | course Drive (`data/student uploaded files`); a local zip of them, if you have one, goes to `detection/cluster/IE7615_project/cache/course_images_m1.zip` (gitignored) | no |
+| Class map and train/val/test split with the md5 of every source photo | `classification/results/m1/data/classes.json`, `split_manifest.csv` | yes |
+| Mask review decisions (ok / sam + box / exclude) | `detection/data/masks/mask_review.csv` | yes |
+| Real multi-object test photos (own photos, EXIF removed) and hand-drawn boxes | `detection/data/real_photos/` | yes |
+| A few demo images | `demo/examples/` | yes |
+
+- M2 checks the two M1 files against fixed checksums (`classes.json` `511d30a1…`, `split_manifest.csv` `ce9172b7…`) and every source photo against its md5 in the manifest; it stops if anything differs. Use the files from git rather than re-running M1, which may write a different file.
+- Masks: M2 computes the rembg masks itself (cached in `IE7615_project/masks/raw_u2net.zip`). For the 267 `sam` rows it runs SAM (`sam_b.pt`, downloaded by Ultralytics) with the stored box, so no mask images need to be shared. The reported runs used the same SAM masks, computed on CPU with `detection/src/sam_masks.py` and uploaded as `fixed` masks. Check on Nov 9 (CPU): M2 regenerated all 267 SAM masks from the stored boxes, identical to the uploaded ones (IoU 1.0); on GPU they may differ by a few pixels.
+
+## Reproduce
+
+1. **Data** (needs course access): put the 20 `images_OBJxxx` folders into `detection/cluster/data/raw/`; copy `classification/results/m1/data/classes.json` and `split_manifest.csv` into `detection/cluster/IE7615_project/runs/m1_20261018_022316/data/`; copy `detection/data/masks/mask_review.csv` into `detection/cluster/IE7615_project/masks/`.
+2. **Classification (M1, optional):** open `classification/notebooks/m1_classification.ipynb` in Colab with a T4 GPU and run all cells. Detection does not need it; it only reads the two files above.
+3. **Detection, nine runs** on the Explorer cluster (setup in [`detection/cluster/README.md`](detection/cluster/README.md); about 10 min per run on a V100):
+
+   ```bash
+   for s in 42 1 2; do for a in A B C; do M2_ARM=$a M2_TRAIN_SEED=$s sbatch m2_job.sbatch; done; done
+   ```
+
+   The data are generated with a fixed seed, so all arms and seeds share the same source objects and the same test sets; `M2_TRAIN_SEED` changes only training. `M2_SMOKE=1` runs a 1-epoch check on a few images (also on a CPU).
+4. **Summaries** (repository root, after downloading the run folders into `runs/`):
+
+   ```bash
+   python detection/src/summarize_ablation.py
+   ```
+
+   ```bash
+   python detection/src/eval_real_photos.py
+   ```
+
+5. **Tracking, registry, service:** run `mlops/tools/import_runs.py`, `register_models.py` and `export_bundle.py --alias champion --to-models`, then `pytest` and the Docker commands (see [MLOps](#mlops-tracking-registry-and-inference-service)).
+6. **Demo:** copy `mobilenetv2.keras` from Drive into `models/` (the detector is already there after step 5) and follow [`demo/README.md`](demo/README.md).
+
+Environment: the cluster job installs its own packages (`detection/cluster/setup_env.sh`); the local tools (evaluation, MLflow, service, demo) run in one Python 3.11 environment from [`requirements-local.txt`](requirements-local.txt). Seeds fix the data and the training order, but GPU kernels are not bit-exact: expect differences in the third decimal between runs on different GPUs (see the ± columns in the ablation table).
 
 ## MLOps: tracking, registry and inference service
 

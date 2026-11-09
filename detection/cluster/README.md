@@ -19,7 +19,7 @@ hpc_m2/                   (this folder, detection/cluster/ in the repository)
 ## 1. Fill in the data (on your laptop)
 
 1. Drive → `data/student uploaded files` → download all `images_OBJxxx` folders → put the 20 folders directly in `data/raw/`. Drive may split the download into several zips; unzip all into the same place. A folder that loses its trailing space (`images_OBJ001 ` → `images_OBJ001`) is fine: the code finds it.
-2. Drive → `data/IE7615_project/runs/m1_20261018_022316/data/` → download `classes.json` and `split_manifest.csv` → put them in `IE7615_project/runs/m1_20261018_022316/data/`. **Do not open them in Excel**: saving changes the checksum, and the job stops on purpose if they differ from M1.
+2. Copy `classes.json` and `split_manifest.csv` from `../../classification/results/m1/data/` (in git; the same files as on Drive `data/IE7615_project/runs/m1_20261018_022316/data/`) into `IE7615_project/runs/m1_20261018_022316/data/`. **Do not open them in Excel**: saving changes the checksum, and the job stops on purpose if they differ from M1. Copy `../data/masks/mask_review.csv` into `IE7615_project/masks/` (the review decisions of the reported runs).
 3. Optional: if the Colab run already finished the masks, download `data/IE7615_project/masks/raw_u2net.zip` → put it in `IE7615_project/masks/`. The job then skips the mask step.
 4. Copy `../src/m2_detection.py` to `code/`, then zip this folder as `hpc_m2.zip` with `hpc_m2/` as its top folder.
 
@@ -106,7 +106,10 @@ Then, from the repository root:
 - `detection/src/eval_real_photos.py` scores every comparison run on the real photos (`detection/results/real_photos/`).
 - `mlops/tools/import_runs.py` adds the runs to MLflow; to change the model in use, register it and move the `champion` alias, then `mlops/tools/export_bundle.py --alias champion --to-models` refreshes `models/` for the demo.
 
-**Updating the code on the cluster.** The job runs `~/hpc_m2/code/m2_detection.py`. After changing `detection/src/m2_detection.py`, copy it there and strip Windows line endings: `scp detection/src/m2_detection.py login.explorer.northeastern.edu:hpc_m2/code/` then `sed -i 's/$//' ~/hpc_m2/code/m2_detection.py` on the cluster. The current mask review decisions are in `detection/data/masks/mask_review.csv`; upload them to `~/hpc_m2/IE7615_project/masks/` with the `fixed/` masks from `detection/src/export_masks_for_cluster.py`.
+**Updating the code on the cluster.** The job runs `~/hpc_m2/code/m2_detection.py`. After changing `detection/src/m2_detection.py`, copy it there and strip Windows line endings: `scp detection/src/m2_detection.py login.explorer.northeastern.edu:hpc_m2/code/` then `sed -i 's/$//' ~/hpc_m2/code/m2_detection.py` on the cluster.
+
+**Mask review.** `detection/data/masks/mask_review.csv` keeps the `sam` rows with their boxes, so the job runs SAM itself (`sam_b.pt` is downloaded into `run/` on first use). The reported runs instead used masks made on the laptop: `detection/src/sam_masks.py` (same SAM call), checked with `review_masks.py --sam-only`, then `export_masks_for_cluster.py` turns the `sam` rows into `fixed` rows plus `fixed/<id>.png` in `detection/cluster/upload_masks/`, uploaded to `~/hpc_m2/IE7615_project/masks/`.
+$//' ~/hpc_m2/code/m2_detection.py` on the cluster. The current mask review decisions are in `detection/data/masks/mask_review.csv`; upload them to `~/hpc_m2/IE7615_project/masks/` with the `fixed/` masks from `detection/src/export_masks_for_cluster.py`.
 
 ## If something fails
 
