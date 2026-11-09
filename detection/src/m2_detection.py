@@ -105,13 +105,14 @@ TRAIN_AUG = {"default": {}, "large": dict(scale=0.9, mosaic=0.5)}[TRAIN_AUG_NAME
 # predicted/mask box area ratio, share of the mask box inside the predicted box, minimum number of such composites.
 SUSPECT = dict(conf=0.25, max_iou=0.6, area_ratio=1.5, gt_inside=0.8, min_hits=2)
 
-# D3 copy-paste and the D1 vs D1+D3 comparison (proposal §6.4, §7.2). Only used when M2_ARM is "A" or "B";
+# D3 copy-paste and the D1 vs D1+D3 comparison (proposal §6.4, §7.2). Only used when M2_ARM is "A", "B" or "C";
 # without it the run is the plain D1 pipeline above.
 #   arm A: D1-train (1,500 grid images)
 #   arm B: the last 750 D1-train images + 750 D3 images that reuse exactly the objects of the 750 grid images they replace
+#   arm C: 1,500 D3 images only, reusing exactly the objects of all 1,500 D1-train images (D3-only control)
 # Both arms: fixed budget (60 epochs, no early stopping), checkpoint and threshold chosen on D1-val + hard-val.
 ARM = os.environ.get("M2_ARM", "").upper()
-assert ARM in ("", "A", "B"), "M2_ARM must be A, B or unset"
+assert ARM in ("", "A", "B", "C"), "M2_ARM must be A, B, C or unset"
 TRAIN_SEED = int(os.environ.get("M2_TRAIN_SEED", SEED))     # training seed only; the data are always generated with SEED
 D3_SIZES = dict(d3train=750, hardval=300, thard=300)
 D3_PROFILES = {                                # size = longest side of the cut-out as a fraction of the canvas (log-uniform)
@@ -120,6 +121,7 @@ D3_PROFILES = {                                # size = longest side of the cut-
 }
 BG_DIR = Path(os.environ.get("M2_BG_DIR", "")) if os.environ.get("M2_BG_DIR") else None   # set later: PROJECT / "backgrounds"
 ARM_EPOCHS = 60
+ARM_LABEL = {"A": "D1-only", "B": "D1+D3", "C": "D3-only"}.get(ARM, "")
 
 if SMOKE:
     SET_SIZES = dict(train=40, val=12, test=12)
@@ -804,7 +806,7 @@ if ARM:
         issues.append("D3 without background photos: cut-outs pasted on the gray canvas")
     if not BGS["B"]:
         issues.append("T-hard on the gray canvas (no backgrounds/B; training backgrounds are never reused for the test set)")
-    replaced = d1_records["train"][:D3_SIZES["d3train"]]
+    replaced = d1_records["train"] if ARM == "C" else d1_records["train"][:D3_SIZES["d3train"]]   # arm C: D3 replaces all of D1-train
     specs = [("d3train", "train", "normal", "A", [[o["source"] for o in r["objects"]] for r in replaced]),
              ("hardval", "val", "normal", "A", None),
              ("thard", "test", "hard", "B", None)]
@@ -824,12 +826,12 @@ if ARM:
     count = lambda recs: {cid: sum(lb["class_id"] == cid for r in recs for lb in r["labels"]) for cid in CLASS_IDS}
     inst_a = count(d1_records["train"])
     inst_b = {cid: a + b for (cid, a), b in zip(count(d1_records["train"][len(replaced):]).items(), count(d3_records["d3train"]).values())}
-    arm_md = md_table(["class", "arm A (D1)", "arm B (D1+D3)", "difference"],
+    arm_md = md_table(["class", "arm A (D1)", f"arm {ARM or 'B'} ({ARM_LABEL or 'D1+D3'})", "difference"],
                       [[cid, inst_a[cid], inst_b[cid], inst_b[cid] - inst_a[cid]] for cid in CLASS_IDS]
                       + [["**total**", sum(inst_a.values()), sum(inst_b.values()), sum(inst_b.values()) - sum(inst_a.values())]])
     display(Markdown(arm_md))
     if inst_a != inst_b:
-        issues.append(f"Arm A vs arm B instances differ by {sum(inst_b.values()) - sum(inst_a.values())} in total "
+        issues.append(f"Arm A vs arm {ARM} instances differ by {sum(inst_b.values()) - sum(inst_a.values())} in total "
                       "(skipped D3 placements); the comparison is approximately matched")
 
     # arm B training folder: D1-train images 750–1499 + D3-train
@@ -1036,7 +1038,7 @@ if ARM:
                           plots=False, verbose=False, project=str(WORK_DIR / "yolo"), name="hardval", exist_ok=True)
     VAL["hardval"] = dict(map50=float(hv_m.box.map50), map50_95=float(hv_m.box.map), at_threshold=sweep_hv[k_best])
     VAL["val_score"] = 0.5 * VAL["map50_95"] + 0.5 * VAL["hardval"]["map50_95"]   # proposal §7.2
-selection = dict(model=f"YOLOv8n fine-tuned on {'D1-train' if not ARM else ('arm A: D1-train' if ARM == 'A' else 'arm B: D1-train 750–1499 + D3-train')}",
+selection = dict(model=f"YOLOv8n fine-tuned on {'D1-train' if not ARM else ('arm A: D1-train' if ARM == 'A' else ('arm B: D1-train 750–1499 + D3-train' if ARM == 'B' else 'arm C: D3-train only (1,500)'))}",
                  train_aug=TRAIN_AUG_NAME, arm=ARM or None, train_seed=TRAIN_SEED,
                  weights_sha256=BEST_SHA, best_epoch=BEST_EPOCH, epochs_run=EPOCHS_RUN,
                  checkpoint_rule="Ultralytics best.pt (fitness 0.1·mAP50 + 0.9·mAP50-95 on " + ("D1-val + hard-val, pooled)" if ARM else "D1-val)"),
@@ -1259,7 +1261,7 @@ config = dict(seed=SEED, canvas=CANVAS, grids=GRIDS, objects_per_image=N_OBJ, se
               comparison=dict(arm=ARM, train_seed=TRAIN_SEED, epochs=ARM_EPOCHS, d3_sizes=D3_SIZES, d3_profiles=D3_PROFILES,
                               backgrounds={g: len(v) for g, v in BGS.items()}) if ARM else None)
 rec = dict(run_id=uuid.uuid4().hex, run_tag=RUN_TAG, task="M2 multi-object detection", model="yolov8n",
-           arm=("A: D1-only" if ARM == "A" else "B: D1+D3") if ARM else "D1-only",
+           arm=f"{ARM}: {ARM_LABEL}" if ARM else "D1-only",
            git_commit=commit, git_dirty=dirty, config=config,
            data=dict(classes_json_sha256=CLASSES_SHA, split_manifest_sha256=MANIFEST_SHA, masks_manifest_sha256=MASKS_SHA,
                      d1_manifest_sha256=DS_SHA, usable_sources=len(SRC) - len(excl), excluded_sources=len(excl),
@@ -1282,7 +1284,7 @@ data_md = md_table(["set", "source split", "images", "objects", "objects / image
     + (f"## D1 vs D1+D3 comparison\n\nArm {ARM}, training seed {TRAIN_SEED}, {epochs} epochs without early stopping; "
        f"backgrounds A {len(BGS['A'])}, B {len(BGS['B'])} (0 = gray canvas). D3 skipped placements: {d3_skips}. "
        f"val_score (0.5·mAP@0.5:0.95 D1-val + 0.5·hard-val) = {VAL['val_score']:.4f}.\n\n"
-       f"### Training instances per class (arm A vs arm B)\n\n{arm_md}\n\n" if ARM else "")
+       f"### Training instances per class (arm A vs arm {ARM})\n\n{arm_md}\n\n" if ARM else "")
     + f"## Detection results\n\n{det_md}\n\nGeneral threshold {GEN_THR} chosen on {'D1-val + hard-val' if ARM else 'D1-val'}.\n\n"
     f"Single-object val photos (large objects, validation): {SINGLE_VAL['top1_correct']}/{SINGLE_VAL['n']} correct, "
     f"{SINGLE_VAL['no_detection']} without detection.\n\n"

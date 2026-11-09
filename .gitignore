@@ -30,6 +30,7 @@ detection/cluster/logs/*
 detection/cluster/ycfg/*
 !detection/cluster/ycfg/.keep
 detection/cluster/work/
+detection/cluster/upload_masks/
 detection/cluster/data/raw/*
 !detection/cluster/data/raw/PUT_IMAGE_FOLDERS_HERE.txt
 
@@ -45,3 +46,17 @@ classification/others/
 
 # Cache of the course images for the OTHERS training (upload to Drive IE7615_project/cache/, not git)
 detection/cluster/IE7615_project/cache/
+
+# MLflow store (tools/import_runs.py) and exported model bundles: local only.
+# Kept in git: the source ↔ MLflow run-ID map and the rollback demo log.
+mlops/*
+!mlops/run_id_map.csv
+!mlops/rollback_demo.log
+model_bundles/
+
+# Real multi-object photos: the converted JPGs (EXIF stripped) and labels are in git;
+# the phone originals, prediction images and check sheets are local only.
+classification/新建文件夹/
+detection/real_multi/predictions/
+detection/real_multi/*.jpg
+detection/cluster/class_overview.jpg
