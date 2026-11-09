@@ -1,7 +1,7 @@
 """Tests for the inference service (run from the repository root: pytest service/tests).
 
 Uses the arm B seed-42 detector from its run folder (weights are not in git; tests skip if it is missing) and fixed
-real photos from detection/real_multi (hand-drawn YOLO labels, class 6 = OBJ011 mug, class 2 = OBJ002 paper roll).
+real photos from detection/data/real_photos (hand-drawn YOLO labels, class 6 = OBJ011 mug, class 2 = OBJ002 paper roll).
 """
 import io
 import json
@@ -14,13 +14,13 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 REPO = Path(__file__).resolve().parents[2]
-RUN = REPO / "detection/cluster/IE7615_project/runs/m2_20261108_054413_armB_seed42"
+RUN = REPO / "runs/m2_20261108_054413_armB_seed42"
 WEIGHTS = RUN / "models/d1_yolov8n_best.pt"
 CLASSES = RUN / "data/classes.json"
-IMAGES = REPO / "detection/real_multi/images"
-LABELS = REPO / "detection/real_multi/labels"
+IMAGES = REPO / "detection/data/real_photos/images"
+LABELS = REPO / "detection/data/real_photos/labels"
 FIXTURES = ["IMG_2291.jpg", "IMG_2296.jpg", "IMG_2300.jpg"]      # landscape and portrait photos
-DB = REPO / "mlops/mlflow.db"
+DB = REPO / "mlops/store/mlflow.db"
 
 pytestmark = pytest.mark.skipif(not WEIGHTS.exists(), reason="arm B seed-42 weights not available locally")
 os.environ.setdefault("YOLO_CONFIG_DIR", str(Path(os.environ.get("TEMP", "/tmp")) / "ultralytics_cfg"))
@@ -189,7 +189,7 @@ def test_tampered_bundle_is_refused(tmp_path):
         load_bundle(b)
 
 
-@pytest.mark.skipif(not DB.exists(), reason="local MLflow store not created (run tools/import_runs.py)")
+@pytest.mark.skipif(not DB.exists(), reason="local MLflow store not created (run mlops/tools/import_runs.py)")
 def test_registry_alias_resolves_to_registered_version(monkeypatch):
     from mlflow import MlflowClient
     uri = "sqlite:///" + DB.as_posix()

@@ -6,21 +6,23 @@ Can YOLOv8 trained on synthetic composites generalize to real photographs with c
 
 This project compares grid concatenation with mask-based copy-paste training data, evaluates synthetic-to-real generalization, and adds ML-specific engineering: experiment tracking and a model registry with rollback. A separate Keras/TensorFlow benchmark supports single-object classification.
 
-> **Status (November 6, 2026):** course milestones M1–M3 are done — classifier comparison, grid-concatenated detection data with YOLOv8n, and a local demo. After the M2 submission, the detector was retrained on the university cluster with reviewed masks (same code). The copy-paste comparison, real-photo evaluation, runtime benchmarks and the engineering work below are still planned.
+> **Status (November 9, 2026):** course milestones M1–M3 are done. Since then: masks of the seven weakest classes reviewed, the copy-paste (D3) comparison run with three seeds per arm (D1 only, D1+D3, D3 only), a real multi-object photo test, and MLflow tracking, a model registry with rollback, and a FastAPI/Docker service. The CPU runtime comparison is still planned.
 
 ## Repository contents
 
 | Folder | What it contains |
 | --- | --- |
-| `classification/` | `m1_classification.ipynb`: data checks, near-duplicate grouping, grouped split, four classifiers, validation-based selection, test results (executed on Colab T4) |
-| `detection/src/` | `m2_detection.py`: object masks, grid-composite generation, YOLOv8n fine-tuning, threshold on validation, test results (run as a notebook on Colab or as a script on the cluster) |
-| `detection/cluster/` | Slurm job and environment setup to run the detection pipeline on the Explorer cluster |
-| `detection/results/` | Results of the current (retrained) detector run: `README.md` (tables), `figures/`, `records/`; `data/` holds the mask review, mask and composite manifests and the per-composite generation records |
-| `models/` | Class map and detector threshold shared by both models; the trained weights go here (not in git), see `models/README.md` |
+| `classification/` | `notebooks/` (M1 classifiers, OTHERS class; executed on Colab T4), `src/` (OTHERS training, rejection methods), `results/` (`m1/`, `others/`, `openset/`) |
+| `detection/src/` | `m2_detection.py` (masks, D1 grid and D3 copy-paste composites, YOLOv8n training, evaluation; Colab notebook or cluster script), mask review tools (`review_masks.py`, `sam_masks.py`, `export_masks_for_cluster.py`), real-photo tools (`label_real_photos.py`, `eval_real_photos.py`) and `summarize_ablation.py` |
+| `detection/data/` | `masks/mask_review.csv` (review decisions used by the current runs) and `real_photos/` (29 phone photos with hand-drawn boxes) |
+| `detection/results/` | `ablation/` (arm A/B/C × 3 seeds, generated from the run reports), `real_photos/` (all nine models on the real photos), `archive/` (earlier single run) |
+| `detection/cluster/` | Slurm job and environment setup for the Explorer cluster |
+| `models/` | Class maps and the detector selection record exported from the registry `champion`; trained weights go here (not in git), see `models/README.md` |
 | `demo/` | `predict.py` (single image → ID; multi-object image → IDs and boxes) and `demo_app.py` (local Gradio demo) with example images; see `demo/README.md` |
-| `tools/` | MLflow tooling: `import_runs.py` (run records → local MLflow store), `register_models.py`, `export_bundle.py`, `rollback_demo.py`; see [MLOps](#mlops-tracking-registry-and-inference-service) |
+| `mlops/` | `tools/` (MLflow import, registration, bundle export, rollback demo), `logs/` (run-ID map, rollback log); the MLflow store `store/` is local only |
 | `service/` | FastAPI inference service (`POST /detect`, `GET /health`), pytest tests and a CPU-only Dockerfile |
-| `mlops/` | Local MLflow store (not in git) plus `run_id_map.csv` and `rollback_demo.log` |
+
+Local only (gitignored): `runs/` (run folders downloaded from the cluster), `mlops/store/` (MLflow database and artifacts), `model_bundles/` (exported bundles). Results reach git as generated summaries; every run is in MLflow; the model in use is the registry alias `champion`.
 
 Model versions are marked with git tags per component, named `<component>-v<major>.<minor>` (each tag is a snapshot of the whole repository):
 
@@ -92,12 +94,24 @@ Measured so far (single runs, seed 42):
 | M2 detection, submitted (Colab T4; 1,939 usable source images) | YOLOv8n on 300 grid-composite test images: mAP@0.5 0.908, mAP@0.5:0.95 0.738, macro-F1 0.890 (threshold 0.50) |
 | M2 detection, retrained (cluster P100; 1,987 usable source images after mask review) | YOLOv8n on 300 grid-composite test images (1,154 objects): mAP@0.5 0.928, mAP@0.5:0.95 0.743, macro-F1 0.900 (threshold 0.55) |
 
-The two M2 test sets were generated from different usable source images, so the two rows are not on identical test images. The detection test set is built like the training data, so it measures in-distribution performance only. Still planned:
+The two M2 test sets were generated from different usable source images, so the two rows are not on identical test images. The detection test set is built like the training data, so it measures in-distribution performance only.
 
-- Grid-only vs grid + copy-paste results on held-out grid and hard synthetic sets.
-- OBJ011 real-photo detections and failures, with case-study limits stated.
-- Detector FP32/INT8 accuracy, latency and resource tables with measurement conditions.
-- MLflow-tracked runs and a Model Registry rollback demonstration.
+### Copy-paste comparison (D1 vs D1+D3 vs D3, three seeds)
+
+Mean over training seeds 42, 1 and 2; full table: [`detection/results/ablation/`](detection/results/ablation/README.md), real photos: [`detection/results/real_photos/`](detection/results/real_photos/README.md).
+
+| Test | arm A (D1) | arm B (D1+D3) | arm C (D3) |
+|---|---|---|---|
+| D1-test mAP@0.5 (grid composites) | 0.954 | 0.962 | 0.623 |
+| T-hard mAP@0.5 (copy-paste composites, same mechanism as D3) | 0.606 | 0.938 | 0.945 |
+| Single-object test photos correct (of 303) | 201 | 240 | 169 |
+| Real multi-object photos, mAP@0.5 (2 classes, 29 photos) | 0.817 | 0.864 | 0.713 |
+| Real multi-object photos, precision | 0.555 | 0.551 | 0.279 |
+
+- Mixing D1 and D3 (arm B) is the best arm on every test; D3 alone matches it only on the D3-style synthetic sets.
+- T-hard shares the copy-paste mechanism with arms B and C, so its large gain overstates the real-photo effect.
+- On real photos, B finds the occluded paper roll more often (recall 0.76 vs 0.58) but has as many false alarms as A, mostly distractors reported as look-alike course objects.
+- Limits: real photos cover only OBJ011 and OBJ002; D3 uses a gray canvas; only 7 of 20 classes had their masks reviewed.
 
 ### M1 conclusions (single-object classification)
 
@@ -129,53 +143,53 @@ The two M2 test sets were generated from different usable source images, so the 
 | 21 classes | `OTHERS` + softmax threshold | 301/303 | 21 | 0.985 |
 | 21 classes | `OTHERS` + prototype distance | 301/303 | 25 | 0.991 |
 
-Details: `classification/results_openset/`.
+Details: `classification/results/openset/`.
 
 ## Running the project
 
-- **Classification (M1):** open `classification/m1_classification.ipynb` in Colab with a T4 GPU, add a Drive shortcut to the course data folder, and run all cells; outputs are written to `IE7615_project/runs/` on Drive.
+- **Classification (M1):** open `classification/notebooks/m1_classification.ipynb` in Colab with a T4 GPU, add a Drive shortcut to the course data folder, and run all cells; outputs are written to `IE7615_project/runs/` on Drive.
 - **Detection (M2):** on the cluster, follow `detection/cluster/README.md` (Slurm job running `detection/src/m2_detection.py`); on Colab, convert the script with `detection/src/percent2ipynb.py` or use the notebook under the tag `detection-v1.0`.
 - **Demo (M3, local CPU):** put the two weight files into `models/` and follow `demo/README.md`; the demo runs at `http://127.0.0.1:7860` on the local machine.
 
 ## MLOps: tracking, registry and inference service
 
-All commands run from the repository root in a Python 3.11 environment with `ultralytics`, `mlflow`, `fastapi`, `uvicorn` and `pytest`. The run folders under `detection/cluster/IE7615_project/runs/` (weights, manifests) are local and not in git.
+All commands run from the repository root in a Python 3.11 environment with `ultralytics`, `mlflow`, `fastapi`, `uvicorn` and `pytest`. The run folders under `runs/` (weights, manifests) are local and not in git.
 
-**Experiment tracking (MLflow, no retraining).** `tools/import_runs.py` reads the existing run records and logs them into a SQLite-backed MLflow store in `mlops/` (`mlops/mlflow.db`, artifacts in `mlops/mlartifacts/`; both gitignored):
+**Experiment tracking (MLflow, no retraining).** `mlops/tools/import_runs.py` reads the existing run records and logs them into a SQLite-backed MLflow store in `mlops/store/` (`mlflow.db`, artifacts in `mlartifacts/`; gitignored):
 
-- **Experiments:** `M1-classification` (4 classifiers), `openset-rejection` (1 parent run with 6 method runs) and `M2-detection` (arm A/B × seeds 42/1/2).
+- **Experiments:** `M1-classification` (4 classifiers), `openset-rejection` (1 parent run with 6 method runs) and `M2-detection` (arm A/B/C × seeds 42/1/2).
 - **Each run logs:**
   - params: full config, seed, arm and Ultralytics train args
   - metrics: `val.*` (D1-val, hard-val), `test.*` (D1-test, T-hard, real photos), and per-epoch `train/*` curves
   - checksums: as recorded, and recomputed from the manifests, with a match tag
   - artifacts: reports, figures, records, and the model folder (weights, `classes.json`, `serving.json`, `MODEL_CARD.md`)
-- **Run IDs:** the original run ID is kept as the tag `source_run_id`, and `mlops/run_id_map.csv` maps it to the MLflow run ID. Re-running skips runs already imported (`--force` re-imports them).
+- **Run IDs:** the original run ID is kept as the tag `source_run_id`, and `mlops/logs/run_id_map.csv` maps it to the MLflow run ID. Re-running skips runs already imported (`--force` re-imports them).
 
 ```bash
-python tools/import_runs.py
+python mlops/tools/import_runs.py
 ```
 
 ```bash
-mlflow ui --backend-store-uri sqlite:///mlops/mlflow.db --port 5000
+mlflow ui --backend-store-uri sqlite:///mlops/store/mlflow.db --port 5000
 ```
 
 **Model registry and rollback.**
 
-- `tools/register_models.py` registers the arm A and arm B seed-42 detectors as versions 1 and 2 of `lab2real-detector`. Each version is tagged with the class-map, weights and manifest checksums, preprocessing, threshold, NMS and runtime.
-- Aliases: `champion` is the version to serve; `previous` is the last good one.
-- `tools/export_bundle.py --alias champion` resolves the alias to a version number. It writes `model_bundles/lab2real-detector-v<N>/` with the files and a `bundle.json` holding the version, the source run and the SHA-256 of every file.
-- `tools/rollback_demo.py`:
+- `mlops/tools/register_models.py` registers the arm A and arm B seed-42 detectors as versions 1 and 2 of `lab2real-detector`. Each version is tagged with the class-map, weights and manifest checksums, preprocessing, threshold, NMS and runtime.
+- Aliases: `champion` is the version to serve; `previous` is the last good one. On registration `champion` → v2 (arm B, the best arm of the comparison), `previous` → v1.
+- `mlops/tools/export_bundle.py --alias champion --to-models` resolves the alias to a version number. It writes `model_bundles/lab2real-detector-v<N>/` with the files and a `bundle.json` holding the version, the source run and the SHA-256 of every file. `--to-models` also copies those weights to `models/` and writes `models/selection.json` from the source run, so the demo uses the same model.
+- `mlops/tools/rollback_demo.py`:
   - promotes B and serves it, from the bundle and by alias;
   - moves `champion` back to A and restarts the service;
   - checks that `/health` and `/detect` now report version 1.
-- The output is in [`mlops/rollback_demo.log`](mlops/rollback_demo.log). The script leaves `champion` on version 1 (arm A).
+- The output is in [`mlops/logs/rollback_demo.log`](mlops/logs/rollback_demo.log) (recorded on Nov 8, before the folders were reorganized). The script leaves `champion` on version 1 (arm A); run `mlops/tools/register_models.py` on a fresh store, or move the alias back, to serve arm B again.
 
 ```bash
-python tools/register_models.py
+python mlops/tools/register_models.py
 ```
 
 ```bash
-python tools/rollback_demo.py
+python mlops/tools/rollback_demo.py
 ```
 
 **Inference service.** `service/app.py` (FastAPI):
@@ -193,10 +207,10 @@ MODEL_ALIAS=champion uvicorn service.app:app --port 8000
 ```
 
 ```bash
-curl -F "file=@detection/real_multi/images/IMG_2291.jpg" http://127.0.0.1:8000/detect
+curl -F "file=@detection/data/real_photos/images/IMG_2291.jpg" http://127.0.0.1:8000/detect
 ```
 
-**Tests.** `pytest` (config in `pytest.ini`) runs `service/tests/` on fixed photos from `detection/real_multi/images` against their hand-drawn labels. The tests cover:
+**Tests.** `pytest` (config in `pytest.ini`) runs `service/tests/` on fixed photos from `detection/data/real_photos/images` against their hand-drawn labels. The tests cover:
 
 - original-coordinate boxes, EXIF rotation and empty scenes
 - invalid or corrupt images, class-map mismatch and a missing model
@@ -217,8 +231,8 @@ docker run --rm -p 8000:8000 -v "$PWD/model_bundles/lab2real-detector-v2:/model:
 ```
 
 - The image is about 1.6 GB (CPU-only PyTorch and Ultralytics).
-- The last section of `mlops/rollback_demo.log` records the Docker check: each bundle was mounted (v2, then v1) and `/detect` was called with curl. `/health` was ready within about 9 s of container start and reported the mounted version, and a non-image upload returned HTTP 400.
-- `rollback_demo.py` rewrites the log, so rerunning it removes that Docker section.
+- The last section of `mlops/logs/rollback_demo.log` records the Docker check: each bundle was mounted (v2, then v1) and `/detect` was called with curl. `/health` was ready within about 9 s of container start and reported the mounted version, and a non-image upload returned HTTP 400.
+- `mlops/tools/rollback_demo.py` rewrites the log, so rerunning it removes that Docker section.
 
 ## References
 

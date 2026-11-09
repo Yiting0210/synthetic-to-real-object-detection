@@ -38,7 +38,7 @@ M1_RESULT = "test accuracy 0.993"
 # The 21-class model (with OTHERS), when it is the one loaded: accuracy on the same 303 test images at the validation threshold
 if classifier and classifier.has_others:
     M1_RESULT = "+ OTHERS · test accuracy 0.993 · rejects 21 of 36 unseen-kind photos" if classifier.threshold else "+ OTHERS · test accuracy 0.997"
-M2_RESULT = "D1-test mAP@0.5 0.928"   # retrained detector (models/, see detection/results); the submitted M2 model had 0.908
+M2_RESULT = "D1-test mAP@0.5 0.962"   # registry champion, arm B seed 42 (models/selection.json, detection/results/ablation)
 REPO_URL = "https://github.com/Yiting0210/synthetic-to-real-object-detection"   # header GitHub icon; inactive if empty
 
 # ---------------------------------------------------------------- icons (inline SVG, no icon library needed)

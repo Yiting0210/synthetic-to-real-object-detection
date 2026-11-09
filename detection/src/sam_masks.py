@@ -2,12 +2,12 @@
 so the new masks can be checked before training.
 
 Run (from the detection folder):
-    E:/CodeTools/anaconda3/envs/ie7615-demo/python.exe tools/sam_preview.py
+    E:/CodeTools/anaconda3/envs/ie7615-demo/python.exe src/sam_masks.py
 
 Writes masks/fixed/<image_id>_sam.png (the same file the pipeline writes) and
 masks/fixed/sam_boxes.json (box used for each file). A rerun only redoes images whose box changed.
 Then check them in the review tool:
-    E:/CodeTools/anaconda3/python.exe tools/mask_review_tool.py --sam-only
+    E:/CodeTools/anaconda3/python.exe src/review_masks.py --sam-only
 """
 import csv
 import json
@@ -21,7 +21,7 @@ from PIL import Image
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from mask_review_tool import MANIFEST, REVIEW, PROJECT, find_raw  # noqa: E402
+from review_masks import MANIFEST, REVIEW, PROJECT, find_raw  # noqa: E402
 
 FIX_DIR = PROJECT / "masks" / "fixed"
 WEIGHTS = Path(os.environ.get("SAM_WEIGHTS", "E:/CodeTools/weights/sam_b.pt"))

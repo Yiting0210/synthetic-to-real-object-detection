@@ -10,7 +10,7 @@
 4. Threshold, per method, chosen on VALIDATION ONLY: the largest value rejecting at most 1% of the 303 val course images.
 5. Applied once to the 303 test course images, the 15 OTHERS test photos and the 36 unseen-kind photos.
    AUROC (test course images vs unseen photos) measures each method without any threshold.
-Writes classification/results_openset/<run>/.
+Writes classification/results/openset/<run>/.
 """
 import csv, hashlib, json, math, re, subprocess, sys, shutil
 from datetime import datetime, timezone
@@ -24,11 +24,11 @@ from openset_methods import (ModelOutputs, METHODS, class_prototypes, rejected, 
 
 ROOT = Path(__file__).resolve().parents[2]
 RAW = ROOT / "detection" / "cluster" / "data" / "raw"
-M1_DATA = ROOT / "classification" / "results_m1" / "data"
+M1_DATA = ROOT / "classification" / "results" / "m1" / "data"
 OTHERS_ROOT = ROOT / "classification" / "others"
 MODELS = ROOT / "models"
 RUN = datetime.now().strftime("openset_%Y%m%d_%H%M%S")
-OUT = ROOT / "classification" / "results_openset" / RUN
+OUT = ROOT / "classification" / "results" / "openset" / RUN
 WORK = OUT / "_work"
 OUT.mkdir(parents=True, exist_ok=True)
 SEED, IMG_SIZE, PHASH_THRESHOLD, SPLIT_RATIOS = 42, 224, 4, (0.70, 0.15, 0.15)

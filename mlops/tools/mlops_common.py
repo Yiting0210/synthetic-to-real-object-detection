@@ -1,15 +1,17 @@
 """Shared paths and helpers for the MLflow tools (import_runs, register_models, export_bundle, rollback_demo).
 
-The tracking store lives under mlops/ in the repository and is gitignored:
-    mlops/mlflow.db       SQLite backend (runs, metrics, Model Registry)
-    mlops/mlartifacts/    artifact root (weights, figures, reports)
+The tracking store lives under mlops/store/ in the repository and is gitignored:
+    mlops/store/mlflow.db       SQLite backend (runs, metrics, Model Registry)
+    mlops/store/mlartifacts/    artifact root (weights, figures, reports)
+mlops/logs/ (in git) holds run_id_map.csv and rollback_demo.log.
 It must stay on a local disk (SQLite locking is unreliable on Drive or network mounts).
 """
 import hashlib
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
-STORE = REPO / "mlops"
+REPO = Path(__file__).resolve().parents[2]
+STORE = REPO / "mlops" / "store"
+LOGS = REPO / "mlops" / "logs"
 DB = STORE / "mlflow.db"
 ARTIFACT_ROOT = STORE / "mlartifacts"
 TRACKING_URI = "sqlite:///" + DB.as_posix()
@@ -31,7 +33,7 @@ def client():
     """MlflowClient on the local store (creates mlops/ on first use)."""
     import mlflow
     from mlflow import MlflowClient
-    STORE.mkdir(exist_ok=True)
+    STORE.mkdir(parents=True, exist_ok=True)
     ARTIFACT_ROOT.mkdir(exist_ok=True)
     mlflow.set_tracking_uri(TRACKING_URI)
     mlflow.set_registry_uri(TRACKING_URI)

@@ -1,9 +1,9 @@
 """Load the YOLOv8n detector for the inference service.
 
 Three ways to point the service at a model (first one set wins):
-    MODEL_BUNDLE=<dir>     model bundle exported by tools/export_bundle.py (bundle.json + checksums). Used in Docker.
+    MODEL_BUNDLE=<dir>     model bundle exported by mlops/tools/export_bundle.py (bundle.json + checksums). Used in Docker.
     MODEL_ALIAS=<alias>    resolve <alias> (e.g. champion) in the local MLflow Model Registry at startup
-                           (MLFLOW_TRACKING_URI, default sqlite:///<repo>/mlops/mlflow.db; MODEL_NAME, default lab2real-detector)
+                           (MLFLOW_TRACKING_URI, default sqlite:///<repo>/mlops/store/mlflow.db; MODEL_NAME, default lab2real-detector)
     MODEL_PATH=<file.pt>   plain weights file (fallback). MODEL_CLASSES=<classes.json> and MODEL_CONF=<float> are optional.
 If MODEL_ALIAS is set but the registry cannot be read and MODEL_PATH is also set, the service falls back to MODEL_PATH.
 With nothing set it uses the repository's models/d1_yolov8n_best.pt (+ models/classes.json, models/selection.json).
@@ -124,7 +124,7 @@ def load_bundle(bundle_dir):
 def load_from_registry(alias, model_name=DEFAULT_MODEL_NAME, tracking_uri=None):
     import mlflow
     from mlflow import MlflowClient
-    uri = tracking_uri or os.environ.get("MLFLOW_TRACKING_URI") or "sqlite:///" + (REPO / "mlops/mlflow.db").as_posix()
+    uri = tracking_uri or os.environ.get("MLFLOW_TRACKING_URI") or "sqlite:///" + (REPO / "mlops/store/mlflow.db").as_posix()
     c = MlflowClient(tracking_uri=uri, registry_uri=uri)
     mv = c.get_model_version_by_alias(model_name, alias)
     tmp = Path(tempfile.mkdtemp(prefix=f"{model_name}-v{mv.version}-"))

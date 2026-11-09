@@ -1,5 +1,7 @@
 # M2 results (m2_20261103_225708)
 
+> Archived: the single run of Nov 3, 2026 (grid composites only, 48 mask review decisions). Current results: [`../../ablation/`](../../ablation/README.md) and [`../../real_photos/`](../../real_photos/README.md).
+
 ## Masks
 
 Usable source images: 1987 of 2022; flagged by the automatic checks: 83; manual review decisions: 48.

@@ -8,7 +8,7 @@ Steps:
   4. export the champion bundle again, restart the service, check that /health and /detect now report version 1
 Time from process start to ready is recorded for every start.
 
-Usage:  python tools/rollback_demo.py [--port 8765]
+Usage:  python mlops/tools/rollback_demo.py [--port 8765]
 """
 import argparse
 import os
@@ -22,10 +22,10 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from export_bundle import export  # noqa: E402
-from mlops_common import DETECTOR_MODEL, REPO, STORE, TRACKING_URI, client  # noqa: E402
+from mlops_common import DETECTOR_MODEL, LOGS, REPO, STORE, TRACKING_URI, client  # noqa: E402
 
-FIXTURE = REPO / "detection/real_multi/images/IMG_2291.jpg"
-LOG = STORE / "rollback_demo.log"
+FIXTURE = REPO / "detection/data/real_photos/images/IMG_2291.jpg"
+LOG = LOGS / "rollback_demo.log"
 LINES = []
 
 
@@ -93,7 +93,7 @@ def main(argv=None):
     c = client()
     by_arm = versions_by_arm(c)
     if not {"A", "B"} <= set(by_arm):
-        raise SystemExit("register arm A and arm B first (tools/register_models.py)")
+        raise SystemExit("register arm A and arm B first (mlops/tools/register_models.py)")
     vA, vB = by_arm["A"], by_arm["B"]
     say(f"Rollback demo for registered model {DETECTOR_MODEL} (store {TRACKING_URI.replace(REPO.as_posix() + '/', '')})")
     say(f"versions: arm A (D1) = v{vA}, arm B (D1+D3) = v{vB}; aliases before: "

@@ -86,14 +86,27 @@ The first `sam` decision downloads `sam_b.pt` (~375 MB) into `run/`.
 |---|---|---|
 | A | D1-train, 1,500 grid images | `M2_ARM=A sbatch m2_job.sbatch` |
 | B | D1-train 750–1499 + 750 D3 images that reuse the objects of D1-train 0–749 | `M2_ARM=B sbatch m2_job.sbatch` |
+| C | 1,500 D3 images that reuse the objects of all of D1-train (D3-only control) | `M2_ARM=C sbatch m2_job.sbatch` |
 
-Both arms: 60 epochs without early stopping; checkpoint and threshold on D1-val + hard-val (300 D3 composites from val photos); final test on D1-test and T-hard (300 harder D3 composites from test photos). For the three seeds per arm add `M2_TRAIN_SEED=1` and `M2_TRAIN_SEED=2` (the data stay the same; only training changes), e.g. `M2_ARM=B M2_TRAIN_SEED=1 sbatch m2_job.sbatch`.
+All arms: 60 epochs without early stopping; checkpoint and threshold on D1-val + hard-val (300 D3 composites from val photos); final test on D1-test and T-hard (300 harder D3 composites from test photos). For the three seeds per arm add `M2_TRAIN_SEED=1` and `M2_TRAIN_SEED=2` (the data stay the same; only training changes), e.g. `M2_ARM=B M2_TRAIN_SEED=1 sbatch m2_job.sbatch`.
 
 Backgrounds: put indoor photos without any of the 20 objects into `IE7615_project/backgrounds/A/` (training and hard-val) and `IE7615_project/backgrounds/B/` (T-hard only). Without them the cut-outs are pasted on the gray canvas, and the run summary says so. Fix the masks first: D3 pastes exactly the mask pixels.
 
 ## 4. Get the results back
 
-Results are in `IE7615_project/runs/m2_<time>/`, same as on Drive. Download that folder; `M2_results_for_report.md` has the tables for the report, and `demo_examples/`, `models/d1_yolov8n_best.pt`, `records/selection.json` are what the demo needs (`models/` and `demo/examples/` in the repository).
+Results are in `IE7615_project/runs/m2_<time>/` on the cluster, same as on Drive. Download each run folder into `runs/` at the repository root (gitignored), for example:
+
+```bash
+ssh login.explorer.northeastern.edu "cd ~/hpc_m2/IE7615_project/runs && tar -cf - m2_<time>_armB_seed42" | tar -xf - -C runs
+```
+
+Then, from the repository root:
+
+- `python detection/src/summarize_ablation.py` rebuilds `detection/results/ablation/` (comparison table and a copy of every run report).
+- `detection/src/eval_real_photos.py` scores every comparison run on the real photos (`detection/results/real_photos/`).
+- `mlops/tools/import_runs.py` adds the runs to MLflow; to change the model in use, register it and move the `champion` alias, then `mlops/tools/export_bundle.py --alias champion --to-models` refreshes `models/` for the demo.
+
+**Updating the code on the cluster.** The job runs `~/hpc_m2/code/m2_detection.py`. After changing `detection/src/m2_detection.py`, copy it there and strip Windows line endings: `scp detection/src/m2_detection.py login.explorer.northeastern.edu:hpc_m2/code/` then `sed -i 's/$//' ~/hpc_m2/code/m2_detection.py` on the cluster. The current mask review decisions are in `detection/data/masks/mask_review.csv`; upload them to `~/hpc_m2/IE7615_project/masks/` with the `fixed/` masks from `detection/src/export_masks_for_cluster.py`.
 
 ## If something fails
 

@@ -1,23 +1,23 @@
 """Import existing run records (Colab M1, HPC M2, open-set study) into the local MLflow store. No retraining.
 
 Sources (all already in the repository / run folders):
-    M1 classification   classification/results_m1/records/run_*.json  (+ HPC copy of its data in runs/m1_*)
-    open-set rejection  classification/results_openset/openset_*/run_record.json
-    M2 detection        detection/cluster/IE7615_project/runs/m2_20261108_*_arm{A,B}_seed{42,1,2}/
+    M1 classification   classification/results/m1/records/run_*.json  (+ HPC copy of its data in runs/m1_*)
+    open-set rejection  classification/results/openset/openset_*/run_record.json
+    M2 detection        runs/m2_20261108_*_arm{A,B,C}_seed{42,1,2}/
                         (records/run_yolov8n_d1.json, figures/train_args.yaml, figures/train_results.csv,
                          models/d1_yolov8n_best.pt, M2_results_for_report.md)
-    real photos         detection/real_multi/real_multi_results.md (per-run table)
+    real photos         detection/results/real_photos/README.md (per-run table)
 
 Each source run becomes one MLflow run. MLflow's own run ID is never overwritten: the original ID is the tag
-`source_run_id`, and mlops/run_id_map.csv maps source run ↔ MLflow run. Re-running skips runs already imported
+`source_run_id`, and mlops/logs/run_id_map.csv maps source run ↔ MLflow run. Re-running skips runs already imported
 (use --force to delete and re-import them).
 
 Metric names: val.* = validation (used for selection), test.* = final test sets (D1-test, T-hard, real photos),
 train/* = per-epoch Ultralytics curves (step = epoch).
 
 Usage:
-    python tools/import_runs.py [--force]
-    mlflow ui --backend-store-uri sqlite:///mlops/mlflow.db --port 5000
+    python mlops/tools/import_runs.py [--force]
+    mlflow ui --backend-store-uri sqlite:///mlops/store/mlflow.db --port 5000
 """
 import argparse
 import csv
@@ -31,15 +31,15 @@ from pathlib import Path
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from mlops_common import MODEL_SUBDIR, REPO, STORE, client, experiment_id, sha256  # noqa: E402
+from mlops_common import LOGS, MODEL_SUBDIR, REPO, STORE, client, experiment_id, sha256  # noqa: E402
 
 from mlflow.entities import Metric, Param, RunTag  # noqa: E402
 
-RUNS = REPO / "detection/cluster/IE7615_project/runs"
-M1_DIR = REPO / "classification/results_m1"
-OPENSET_DIR = REPO / "classification/results_openset"
-REAL_MD = REPO / "detection/real_multi/real_multi_results.md"
-M2_PATTERN = "m2_20261108_*_arm[AB]_seed*"
+RUNS = REPO / "runs"
+M1_DIR = REPO / "classification/results/m1"
+OPENSET_DIR = REPO / "classification/results/openset"
+REAL_MD = REPO / "detection/results/real_photos/README.md"
+M2_PATTERN = "m2_20261108_*_arm[ABC]_seed*"
 
 EXP_M1, EXP_OPENSET, EXP_M2 = "M1-classification", "openset-rejection", "M2-detection"
 MAX_PARAM = 6000
@@ -130,7 +130,7 @@ def new_run(c, exp_name, source_run_id, run_name, start_iso, force, parent=None)
             print(f"  skip (already imported): {run_name} → {old.info.run_id}")
             return None, old.info.run_id
         c.delete_run(old.info.run_id)
-    tags = {"source_run_id": source_run_id, "imported_by": "tools/import_runs.py", "import_repo_commit": git_head()}
+    tags = {"source_run_id": source_run_id, "imported_by": "mlops/tools/import_runs.py", "import_repo_commit": git_head()}
     if parent:
         tags["mlflow.parentRunId"] = parent
     run = c.create_run(exp_id, start_time=ms(start_iso), tags=tags, run_name=run_name)
@@ -266,7 +266,7 @@ def real_photo_rows():
         if header is None:
             header = cells
         elif not set(cells[0]) <= set("-: "):
-            m = re.match(r"([AB]) seed (\d+)", cells[0])
+            m = re.match(r"([ABC]) seed (\d+)", cells[0])
             if m:
                 rows[(m.group(1), int(m.group(2)))] = dict(zip(header, cells))
     return rows
@@ -297,9 +297,9 @@ def model_card(r, sel, classes):
 - Input: RGB image of any size; letterboxed to {r['config']['imgsz']}×{r['config']['imgsz']} inside Ultralytics; boxes are returned in original-image pixels
 - Confidence threshold: {sel['general_threshold']} ({sel['threshold_rule']}); NMS IoU {sel['nms_iou']}
 - Checkpoint rule: {sel['checkpoint_rule']}
-- Trained on synthetic composites (D1{' + D3' if sel.get('arm') == 'B' else ''}) of single-object photos; seed {sel.get('train_seed')}
+- Trained on synthetic composites ({ {'B': 'D1 + D3', 'C': 'D3 only'}.get(sel.get('arm'), 'D1') }) of single-object photos; seed {sel.get('train_seed')}
 - Limitations: only the 20 course objects; anything else may be reported as one of them (no OTHERS class);
-  real multi-object photos were only tested for OBJ011 and OBJ002 (detection/real_multi); CPU latency not benchmarked yet
+  real multi-object photos were only tested for OBJ011 and OBJ002 (detection/data/real_photos); CPU latency not benchmarked yet
 """
 
 
@@ -360,7 +360,7 @@ def import_m2(c, force, mapping):
         if row:
             for col, k in REAL_KEYS.items():
                 w.metric(f"test.real.{k}", row.get(col))
-        w.tag("real_photo_results", "logged as test.real.*" if row else "not in real_multi_results.md")
+        w.tag("real_photo_results", "logged as test.real.*" if row else "not in detection/results/real_photos/README.md")
         with open(d / "figures/train_results.csv", encoding="utf-8") as f:
             for e in csv.DictReader(f):
                 step = int(float(e["epoch"]))
@@ -415,7 +415,8 @@ def main(argv=None):
     print("M1 classification"); import_m1(c, args.force, mapping)
     print("Open-set rejection"); import_openset(c, args.force, mapping)
     print("M2 detection"); import_m2(c, args.force, mapping)
-    out = STORE / "run_id_map.csv"
+    LOGS.mkdir(parents=True, exist_ok=True)
+    out = LOGS / "run_id_map.csv"
     with open(out, "w", newline="", encoding="utf-8") as f:
         wr = csv.writer(f)
         wr.writerow(["experiment", "source_run_id", "source_run_tag", "source_record", "mlflow_run_id"])

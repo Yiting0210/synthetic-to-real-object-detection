@@ -1,17 +1,17 @@
 """Mask review tool: look at each image with its mask outline and write decisions to mask_review.csv.
 
 Run (from the detection folder):
-    E:/CodeTools/anaconda3/python.exe tools/mask_review_tool.py OBJ000 OBJ001
+    E:/CodeTools/anaconda3/python.exe src/review_masks.py OBJ000 OBJ001
     (no class names = all classes)
 
 Screen:
     red outline   current mask (rembg)
     blue box      box the training labels get from that mask
     cyan box      box already saved for `sam` in mask_review.csv
-    green         SAM result for that box (after tools/sam_preview.py has run)
+    green         SAM result for that box (after src/sam_masks.py has run)
     yellow box    box you are drawing
 
-Check the SAM results:  tools/mask_review_tool.py --sam-only
+Check the SAM results:  src/review_masks.py --sam-only
     green right → / Space;  green wrong → draw a new box + Enter (then rerun sam_preview.py) or x
 
 Mouse: drag a box around the whole object (without hands, without background).
@@ -85,7 +85,7 @@ FIX_DIR = PROJECT / "masks" / "fixed"
 
 
 def load_sam(iid, box):
-    """SAM mask from tools/sam_preview.py, only if it was made with this exact box."""
+    """SAM mask from src/sam_masks.py, only if it was made with this exact box."""
     log, png = FIX_DIR / "sam_boxes.json", FIX_DIR / f"{iid}_sam.png"
     if not (log.exists() and png.exists()):
         return None

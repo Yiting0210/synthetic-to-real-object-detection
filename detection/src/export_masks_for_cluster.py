@@ -1,7 +1,7 @@
 """Make the mask-review upload for the cluster from the locally checked SAM masks.
 
-Run (from the detection folder), after tools/sam_preview.py and the --sam-only check:
-    E:/CodeTools/anaconda3/python.exe tools/export_for_cluster.py
+Run (from the detection folder), after src/sam_masks.py and the --sam-only check:
+    E:/CodeTools/anaconda3/python.exe src/export_masks_for_cluster.py
 
 Writes cluster/upload_masks/ with
     mask_review.csv   the local file, every `sam` row turned into `fixed` (the box stays in its column)
@@ -16,7 +16,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from mask_review_tool import FIELDS, FIX_DIR, ROOT, load_review, load_sam  # noqa: E402
+from review_masks import FIELDS, FIX_DIR, ROOT, load_review, load_sam  # noqa: E402
 
 OUT = ROOT / "upload_masks"
 
@@ -27,7 +27,7 @@ def main():
     missing = [k for k in sam_ids if load_sam(k, rows[k]["box"].strip()) is None]
     if missing:
         raise SystemExit(f"{len(missing)} sam rows have no SAM mask for their current box "
-                         f"(run tools/sam_preview.py again): {', '.join(missing[:10])}")
+                         f"(run src/sam_masks.py again): {', '.join(missing[:10])}")
     if OUT.exists():
         shutil.rmtree(OUT)
     (OUT / "fixed").mkdir(parents=True)

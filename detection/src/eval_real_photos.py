@@ -1,9 +1,9 @@
-"""Evaluate the M2 comparison models (arms A, B and C if present) on the real multi-object photos (detection/real_multi).
+"""Evaluate the M2 comparison models (arms A, B and C if present) on the real multi-object photos (detection/data/real_photos).
 
 Run:
-    E:/CodeTools/anaconda3/envs/ie7615-demo/python.exe tools/eval_real_multi.py
+    E:/CodeTools/anaconda3/envs/ie7615-demo/python.exe detection/src/eval_real_photos.py      (from the repository root)
 
-Ground truth: real_multi/labels/*.txt (YOLO format, drawn by hand with tools/real_box_tool.py).
+Ground truth: detection/data/real_photos/labels/*.txt (YOLO format, drawn by hand with src/label_real_photos.py).
 Only OBJ011 (mug, class 6) and OBJ002 (paper roll, class 2) are in the photos; every other
 object is a distractor, so any detection of another class is a false alarm.
 
@@ -13,7 +13,8 @@ Per model:
     recall per class, precision,
     false alarms = detections of the 18 classes that are not in the photos,
     other false positives = mug/roll detections that match no box (bad location or duplicate)
-Writes real_multi/real_multi_results.md and real_multi/predictions/<run>/ (images with boxes, run 1 of each arm).
+Writes detection/results/real_photos/README.md, and detection/results/real_photos/predictions/<run>/ (images with boxes,
+seed 1 of each arm; not in git).
 """
 import re
 import statistics as st
@@ -22,8 +23,9 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent.parent
-REAL = HERE / "real_multi"
-RUNS = HERE / "cluster" / "IE7615_project" / "runs"
+REAL = HERE / "data" / "real_photos"
+OUT = HERE / "results" / "real_photos"
+RUNS = HERE.parent / "runs"                    # run folders downloaded from the cluster (not in git)
 CLASSES = {6: "OBJ011", 2: "OBJ002"}
 IOU = 0.5
 
@@ -134,7 +136,7 @@ def main():
     for run in runs:
         arm = re.search(r"arm([ABC])_seed(\d+)", run.name)
         key = (arm.group(1), int(arm.group(2)))
-        save = REAL / "predictions" / run.name if key[1] == 1 else None
+        save = OUT / "predictions" / run.name if key[1] == 1 else None
         res[key] = evaluate(run, gt, save)
         print(run.name, {k: (round(v, 3) if isinstance(v, float) else v) for k, v in res[key].items()}, flush=True)
     metrics = [k for k in next(iter(res.values())) if k not in ("thr", "alarm_classes")]
@@ -162,8 +164,9 @@ def main():
         out.append(f"| {arm} seed {s} | {r['thr']} | {vals} | {r['alarm_classes']} |")
     out += ["", "Caveat: only two of the 20 classes can be tested (the other objects belong to classmates); "
             "the paper roll is a different roll from the one in training (same category, different instance)."]
-    (REAL / "real_multi_results.md").write_text("\n".join(out) + "\n", encoding="utf-8")
-    print("wrote", REAL / "real_multi_results.md")
+    OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / "README.md").write_text("\n".join(out) + "\n", encoding="utf-8")
+    print("wrote", OUT / "README.md")
 
 
 if __name__ == "__main__":

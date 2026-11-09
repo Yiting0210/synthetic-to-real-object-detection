@@ -10,17 +10,17 @@ Course requirements (due Nov 3): 1) the object detection model is complete; 2) l
 
 ## 1. Get the models (once)
 
-Both tools read the repository-level `../models/` folder (change it with `--models-dir`). `classes.json` and `selection.json` are already there. The two weight files are not in git: copy them from Drive into `../models/`:
+Both tools read the repository-level `../models/` folder (change it with `--models-dir`). `classes.json` and `selection.json` are already there. The two weight files are not in git: export the detector from the registry and copy the classifier from Drive into `../models/`:
 
 | File | Source |
 |---|---|
 | `classes.json` | in git; from `IE7615_project/runs/m1_20261018_022316/data/classes.json` |
 | `mobilenetv2.keras` | Drive `IE7615_project/runs/m1_20261018_022316/models/mobilenetv2.keras` |
-| `d1_yolov8n_best.pt` | retrained after mask review, cluster run `m2_20261103_225708` |
-| `selection.json` | in git; from the retrained run, see `../detection/results/` (confidence threshold chosen on D1-val: 0.55) |
+| `d1_yolov8n_best.pt` | registry `champion` (arm B, seed 42): `python mlops/tools/export_bundle.py --alias champion --to-models` from the repository root |
+| `selection.json` | in git; written by the same export (confidence threshold chosen on D1-val + hard-val: 0.70) |
 
-The demo images in `examples/{single,multi}/` come from the same retrained run. Each model goes with the examples of its own run:
-the composites were regenerated, so `d1_test_00129.jpg` is a different image for the submitted M2 model (tag `detection-v1.0`).
+The demo images in `examples/{single,multi}/` come from the earlier retrained run `m2_20261103_225708`. They are built only from test-split photos, so they stay held out for the arm B detector, but the test notes and the live demo script below were measured with that earlier detector (threshold 0.55).
+The composites were regenerated between runs, so `d1_test_00129.jpg` is a different image for the submitted M2 model (tag `detection-v1.0`).
 
 `predict.py` checks that the detector's class names match `classes.json` and stops if they don't.
 

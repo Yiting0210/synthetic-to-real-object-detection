@@ -1,105 +1,174 @@
 {
-  "model": "YOLOv8n fine-tuned on D1-train",
-  "weights_sha256": "68dc75dcbb116c683c903d5914a8706dec8947dfb5cfc7eb28ddcf222960e6d1",
-  "best_epoch": 22,
-  "epochs_run": 42,
-  "checkpoint_rule": "Ultralytics best.pt (fitness 0.1\u00b7mAP50 + 0.9\u00b7mAP50-95 on D1-val)",
-  "general_threshold": 0.55,
-  "threshold_rule": "max macro-F1 over 20 classes on D1-val; grid 0.05\u20130.95; ties \u2192 higher",
+  "model": "YOLOv8n fine-tuned on arm B: D1-train 750\u20131499 + D3-train",
+  "train_aug": "default",
+  "arm": "B",
+  "train_seed": 42,
+  "weights_sha256": "b2641678d4ee1ce55d5ea6b0091a80918f494900ddf734f1b8ec679a5c3856ae",
+  "best_epoch": 54,
+  "epochs_run": 60,
+  "checkpoint_rule": "Ultralytics best.pt (fitness 0.1\u00b7mAP50 + 0.9\u00b7mAP50-95 on D1-val + hard-val, pooled)",
+  "general_threshold": 0.7,
+  "threshold_rule": "max of the equal-weight average macro-F1 on D1-val and hard-val; grid 0.05\u20130.95; ties \u2192 higher",
   "nms_iou": 0.7,
-  "decided_at": "2026-11-04T04:24:09.537254+00:00",
+  "decided_at": "2026-11-08T10:59:13.298479+00:00",
   "val": {
-    "map50": 0.954844286933471,
-    "map50_95": 0.8111531376724301,
+    "map50": 0.9703476395136537,
+    "map50_95": 0.8519856979746493,
     "at_threshold": {
-      "threshold": 0.55,
-      "precision": 0.9457167090754877,
-      "recall": 0.9230132450331126,
-      "macro_f1": 0.9330353109416937,
+      "threshold": 0.7,
+      "precision": 0.9779286926994907,
+      "recall": 0.9536423841059603,
+      "macro_f1": 0.9639944504120388,
       "per_class_f1": [
-        0.9279999999999999,
-        0.6306306306306306,
-        0.84375,
-        0.810344827586207,
-        0.9344262295081968,
-        0.9661016949152543,
         1.0,
-        0.9838709677419354,
+        0.7047619047619049,
         1.0,
-        0.8888888888888888,
+        0.9180327868852459,
+        0.9747899159663865,
+        0.9579831932773109,
+        1.0,
+        0.9672131147540983,
+        1.0,
+        1.0,
         1.0,
         0.9915966386554621,
-        0.9833333333333333,
-        0.8869565217391303,
+        0.9333333333333333,
+        0.9747899159663865,
         0.9915966386554621,
-        0.9322033898305084,
-        0.9565217391304348,
-        0.9917355371900827,
-        0.9915966386554621,
-        0.9491525423728815
+        0.9500000000000001,
+        0.9655172413793104,
+        1.0,
+        0.9586776859504132,
+        0.9915966386554621
       ],
-      "tp": 1115,
-      "fp": 64,
-      "fn": 93,
+      "tp": 1152,
+      "fp": 26,
+      "fn": 56,
       "errors": {
-        "missed": 93,
-        "wrong_class": 15,
-        "wrong_location": 29,
-        "duplicate": 8,
-        "background": 12
+        "missed": 56,
+        "wrong_class": 0,
+        "wrong_location": 15,
+        "duplicate": 2,
+        "background": 9
       },
-      "confusions": [
-        [
-          "OBJ011",
-          "OBJ000",
-          3
+      "confusions": []
+    },
+    "single_object": {
+      "n": 303,
+      "top1_correct": 206,
+      "no_detection": 93,
+      "top1_acc": 0.6798679867986799
+    },
+    "hardval": {
+      "map50": 0.9499938440139365,
+      "map50_95": 0.8720376270910205,
+      "at_threshold": {
+        "threshold": 0.7,
+        "precision": 0.9448961156278229,
+        "recall": 0.8841927303465765,
+        "macro_f1": 0.9127359690800994,
+        "per_class_f1": [
+          0.9915966386554621,
+          0.888888888888889,
+          0.957983193277311,
+          0.8793103448275862,
+          0.8363636363636364,
+          0.9122807017543859,
+          0.9009009009009009,
+          0.8928571428571428,
+          0.9391304347826087,
+          0.9298245614035089,
+          0.9491525423728814,
+          0.9649122807017544,
+          0.8793103448275862,
+          0.9174311926605504,
+          0.8235294117647058,
+          0.9586776859504132,
+          0.822429906542056,
+          0.9827586206896551,
+          0.9107142857142857,
+          0.9166666666666666
         ],
-        [
-          "OBJ916",
-          "OBJ006",
-          3
-        ],
-        [
-          "OBJ529",
-          "OBJ002",
-          2
-        ],
-        [
-          "OBJ777",
-          "OBJ001",
-          1
-        ],
-        [
-          "OBJ001",
-          "OBJ002",
-          1
-        ],
-        [
-          "OBJ523",
-          "OBJ222",
-          1
-        ],
-        [
-          "OBJ007",
-          "OBJ001",
-          1
-        ],
-        [
-          "OBJ011",
-          "OBJ222",
-          1
-        ],
-        [
-          "OBJ000",
-          "OBJ666",
-          1
-        ],
-        [
-          "OBJ222",
-          "OBJ000",
-          1
+        "tp": 1046,
+        "fp": 61,
+        "fn": 137,
+        "errors": {
+          "missed": 137,
+          "wrong_class": 19,
+          "wrong_location": 30,
+          "duplicate": 9,
+          "background": 3
+        },
+        "confusions": [
+          [
+            "OBJ006",
+            "OBJ916",
+            5
+          ],
+          [
+            "OBJ222",
+            "OBJ523",
+            4
+          ],
+          [
+            "OBJ608",
+            "OBJ011",
+            2
+          ],
+          [
+            "OBJ777",
+            "OBJ123",
+            1
+          ],
+          [
+            "OBJ001",
+            "OBJ007",
+            1
+          ],
+          [
+            "OBJ007",
+            "OBJ608",
+            1
+          ],
+          [
+            "OBJ608",
+            "OBJ201",
+            1
+          ],
+          [
+            "OBJ608",
+            "OBJ777",
+            1
+          ],
+          [
+            "OBJ777",
+            "OBJ006",
+            1
+          ],
+          [
+            "OBJ001",
+            "OBJ070",
+            1
+          ],
+          [
+            "OBJ004",
+            "OBJ529",
+            1
+          ]
         ]
-      ]
-    }
+      }
+    },
+    "val_score": 0.8620116625328349
+  },
+  "registry": {
+    "model_name": "lab2real-detector",
+    "version": 2,
+    "alias_at_export": "champion",
+    "run_id": "5f404164ed75480aba136c4d7837304f",
+    "arm": "B",
+    "seed": "42",
+    "source_run_tag": "m2_20261108_054413_armB_seed42",
+    "bundle": "model_bundles/lab2real-detector-v2",
+    "exported_at": "2026-11-09T08:53:03.495696+00:00"
   }
 }

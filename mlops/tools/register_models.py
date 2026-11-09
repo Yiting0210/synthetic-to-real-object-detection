@@ -2,12 +2,12 @@
 
 Each version points to the `model/` artifact folder of its imported MLflow run (weights, classes.json, serving.json,
 MODEL_CARD.md) and carries tags for the class map, preprocessing, thresholds, data manifest and runtime.
-Run tools/import_runs.py first. Re-running does not create duplicate versions.
+Run mlops/tools/import_runs.py first. Re-running does not create duplicate versions.
 
-Aliases: `champion` = version intended for use; `previous` = last good version. On first registration champion → arm A
-(the M2 report's reference arm). tools/rollback_demo.py moves them.
+Aliases: `champion` = version intended for use; `previous` = last good version. On first registration champion → arm B
+(best arm of the A/B/C ablation, detection/results/ablation) and previous → arm A. mlops/tools/rollback_demo.py moves them.
 
-Usage:  python tools/register_models.py
+Usage:  python mlops/tools/register_models.py
 """
 import json
 import sys
@@ -61,8 +61,9 @@ def main():
     versions = [register(c, a, s) for a, s in TO_REGISTER]
     rm = c.get_registered_model(DETECTOR_MODEL)
     if "champion" not in rm.aliases:
-        c.set_registered_model_alias(DETECTOR_MODEL, "champion", versions[0].version)
-        print(f"  champion → version {versions[0].version}")
+        c.set_registered_model_alias(DETECTOR_MODEL, "champion", versions[1].version)     # arm B
+        c.set_registered_model_alias(DETECTOR_MODEL, "previous", versions[0].version)     # arm A
+        print(f"  champion → version {versions[1].version} (arm B), previous → version {versions[0].version} (arm A)")
     print("aliases:", dict(c.get_registered_model(DETECTOR_MODEL).aliases))
 
 

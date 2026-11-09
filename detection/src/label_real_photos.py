@@ -1,13 +1,13 @@
-"""Draw ground-truth boxes on the real multi-object photos (detection/real_multi/images).
+"""Draw ground-truth boxes on the real multi-object photos (detection/data/real_photos/images).
 
 Run:
-    E:/CodeTools/anaconda3/python.exe "D:/Note/neu/IE7615/Discriminative Deep Learning Project/detection/tools/real_box_tool.py"
+    E:/CodeTools/anaconda3/python.exe detection/src/label_real_photos.py      (from the repository root)
 
 Mouse: drag a box around one object, then press its class key
     1 = OBJ011 (mug)      2 = OBJ002 (paper roll)
 Other objects (bottles, jars, boxes ...) are not boxed: they are distractors.
 Keys: z = undo last box, -> / Space = save + next, <- = save + back, q / Esc = save + quit.
-Labels go to real_multi/labels/<name>.txt in YOLO format (class x_center y_center w h, 0-1),
+Labels go to detection/data/real_photos/labels/<name>.txt in YOLO format (class x_center y_center w h, 0-1),
 with the class index of data/classes.json (OBJ011 = 6, OBJ002 = 2). An empty file means "no target object".
 """
 import sys
@@ -16,7 +16,7 @@ from pathlib import Path
 
 from PIL import Image, ImageTk
 
-ROOT = Path(__file__).resolve().parent.parent / "real_multi"
+ROOT = Path(__file__).resolve().parent.parent / "data" / "real_photos"
 IMG_DIR, LBL_DIR = ROOT / "images", ROOT / "labels"
 KEYS = {"1": (6, "OBJ011", "#00c000"), "2": (2, "OBJ002", "#ff8000")}
 COLOR = {v[0]: v[2] for v in KEYS.values()}

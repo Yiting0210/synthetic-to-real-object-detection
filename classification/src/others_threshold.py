@@ -10,7 +10,7 @@ Then T is applied once to the test images and to the unseen-object photos.
 
 Rebuilds the exact inputs of the Colab run m1o_20261107_113839 (M1 split for the 20 classes; same import, square crop,
 pHash groups and seeded split for OTHERS) and first checks that the plain 21-class predictions reproduce the Colab numbers.
-Writes classification/results_others/threshold/.
+Writes classification/results/others/threshold/.
 """
 import csv, json, math, re
 from pathlib import Path
@@ -23,7 +23,7 @@ M1_DATA = ROOT / "detection" / "cluster" / "IE7615_project" / "runs" / "m1_20261
 OTHERS_ROOT = ROOT / "classification" / "others"
 MODEL = ROOT / "models" / "mobilenetv2_others.keras"
 CLASSES_FILE = ROOT / "models" / "classes_with_others.json"
-OUT = ROOT / "classification" / "results_others" / "threshold"
+OUT = ROOT / "classification" / "results" / "others" / "threshold"
 OUT.mkdir(parents=True, exist_ok=True)
 WORK = OUT / "_work"
 SEED, IMG_SIZE, PHASH_THRESHOLD, SPLIT_RATIOS = 42, 224, 4, (0.70, 0.15, 0.15)
