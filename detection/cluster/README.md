@@ -1,6 +1,6 @@
 # M2 on the university cluster (Slurm)
 
-This folder runs the detection pipeline (`../src/m2_detection.py`, the same code as the M2 Colab notebook) as a batch job instead of in Colab. It was uploaded to the cluster as `~/hpc_m2`, the name used in the commands below. The folder layout copies the Drive layout, so no paths in the code change.
+This folder runs the detection pipeline (`../src/m2_detection.py`, the same code as the M2 Colab notebook) as a batch job instead of in Colab. It was uploaded to the cluster as `~/hpc_m2`, the name used in the commands below. The folder layout copies the Drive layout, so no paths in the code change. Package versions and code of the nine reported runs: `env_ie7615-m2_freeze.txt` (this folder) and [`../../docs/PROVENANCE.md`](../../docs/PROVENANCE.md).
 
 ```
 hpc_m2/                   (this folder, detection/cluster/ in the repository)
@@ -15,6 +15,16 @@ hpc_m2/                   (this folder, detection/cluster/ in the repository)
 ├── logs/                 job logs (m2_<jobid>.out)
 └── ycfg/                 Ultralytics settings and font
 ```
+
+## Recommended for new runs: a git checkout
+
+Instead of the zip below, clone the repository on the cluster and use this folder in place (`<repo>/detection/cluster/`). The job then runs `../src/m2_detection.py` from git, so each run record gets `git_commit` and `git_dirty` (the reported runs, which used the zip, do not have them: see [`../../docs/PROVENANCE.md`](../../docs/PROVENANCE.md)), and it reads the M1 split from `classification/results/m1/`, so step 2's copy of the M1 files is not needed. Still needed:
+
+- the 20 image folders in `data/raw/` (step 1)
+- `cp ../data/masks/mask_review.csv IE7615_project/masks/`
+- `bash setup_env.sh` once in this folder (env, `run/yolov8n.pt`, font)
+
+The job only reads the checkout (no pull, checkout or commit). It stops before training if `code/` exists in the checkout (that copy would run while `git_commit` names the checkout) or if `../src/m2_detection.py` differs from the last commit (`M2_ALLOW_DIRTY=1` runs it anyway, recorded as `git_dirty: true`). The log prints the commit and the sha256 of the script that runs.
 
 ## 1. Fill in the data (on your laptop)
 
@@ -106,10 +116,9 @@ Then, from the repository root:
 - `detection/src/eval_real_photos.py` scores every comparison run on the real photos (`detection/results/real_photos/`).
 - `mlops/tools/import_runs.py` adds the runs to MLflow; to change the model in use, register it and move the `champion` alias, then `mlops/tools/export_bundle.py --alias champion --to-models` refreshes `models/` for the demo.
 
-**Updating the code on the cluster.** The job runs `~/hpc_m2/code/m2_detection.py`. After changing `detection/src/m2_detection.py`, copy it there and strip Windows line endings: `scp detection/src/m2_detection.py login.explorer.northeastern.edu:hpc_m2/code/` then `sed -i 's/$//' ~/hpc_m2/code/m2_detection.py` on the cluster.
+**Updating the code on the cluster.** The job runs `~/hpc_m2/code/m2_detection.py`. After changing `detection/src/m2_detection.py`, copy it there and strip Windows line endings: `scp detection/src/m2_detection.py login.explorer.northeastern.edu:hpc_m2/code/` then `sed -i 's/\r$//' ~/hpc_m2/code/m2_detection.py` on the cluster.
 
 **Mask review.** `detection/data/masks/mask_review.csv` keeps the `sam` rows with their boxes, so the job runs SAM itself (`sam_b.pt` is downloaded into `run/` on first use). The reported runs instead used masks made on the laptop: `detection/src/sam_masks.py` (same SAM call), checked with `review_masks.py --sam-only`, then `export_masks_for_cluster.py` turns the `sam` rows into `fixed` rows plus `fixed/<id>.png` in `detection/cluster/upload_masks/`, uploaded to `~/hpc_m2/IE7615_project/masks/`.
-$//' ~/hpc_m2/code/m2_detection.py` on the cluster. The current mask review decisions are in `detection/data/masks/mask_review.csv`; upload them to `~/hpc_m2/IE7615_project/masks/` with the `fixed/` masks from `detection/src/export_masks_for_cluster.py`.
 
 ## If something fails
 

@@ -31,15 +31,32 @@ python -c "import torch; assert torch.cuda.is_available(), 'PyTorch cannot see t
 export M2_DATA_DIR="$B/data/raw"           # shared course folder (images_OBJxxx folders)
 export M2_PROJECT="$B/IE7615_project"      # M1 run, mask cache and M2 outputs, same layout as on Drive
 export M2_WORK_DIR="$B/work/m2_data_${SLURM_JOB_ID:-local}"   # scratch copy per job (arms A and B can run at the same time); emptied at the start of the run
-export M2_REPO_DIR="$B/code"
 export YOLO_CONFIG_DIR="$B/ycfg"
 export MPLBACKEND=Agg
 
 echo "job $SLURM_JOB_ID on $(hostname), $(date)"
 nvidia-smi || echo "nvidia-smi not available"
 cd "$B/run"                                # yolov8n.pt is here
-CODE="$B/code/m2_detection.py"             # bundle copy; in the git repo the code lives in detection/src
-[ -f "$CODE" ] || CODE="$B/../src/m2_detection.py"
+CODE="$B/code/m2_detection.py"             # bundle copy (zip upload as ~/hpc_m2); in a git checkout the code is ../src
+if [ -e "$B/../../.git" ]; then            # this folder is detection/cluster/ of a git checkout
+  command -v git >/dev/null || { echo "ERROR: git not found; it is needed to record the code commit"; exit 1; }
+  # A copy in code/ would run while git_commit names the checkout's HEAD: refuse it
+  if [ -e "$CODE" ]; then echo "ERROR: $CODE exists in a git checkout; delete code/ so the job runs ../src/m2_detection.py"; exit 1; fi
+  CODE="$B/../src/m2_detection.py"
+  # git_commit in the run record must be the code that runs: no uncommitted change to the script
+  # (M2_ALLOW_DIRTY=1 runs it anyway; the record then has git_dirty = true). The job never changes the checkout.
+  if ! git -C "$B" diff --quiet HEAD -- "$CODE"; then
+    [ "${M2_ALLOW_DIRTY:-0}" = 1 ] || { echo "ERROR: $CODE differs from the last commit; commit it or set M2_ALLOW_DIRTY=1"; exit 1; }
+  fi
+  echo "git checkout at $(git -C "$B" rev-parse HEAD) ($(git -C "$B" status --porcelain | grep -q . && echo 'uncommitted changes' || echo clean))"
+  # The M1 split is read from git, so it need not be copied into IE7615_project/; an M2_M1_RUN set before sbatch wins
+  M1_IN_GIT="$B/../../classification/results/m1"
+  if [ -z "${M2_M1_RUN:-}" ] && [ -f "$M1_IN_GIT/data/split_manifest.csv" ]; then export M2_M1_RUN="$(cd "$M1_IN_GIT" && pwd)"; fi
+elif [ ! -f "$CODE" ]; then
+  CODE="$B/../src/m2_detection.py"
+fi
+[ -f "$CODE" ] || { echo "ERROR: m2_detection.py not found ($CODE)"; exit 1; }
 export M2_REPO_DIR="$(dirname "$CODE")"
+echo "code: $CODE (sha256 $(sha256sum "$CODE" | cut -d' ' -f1)); M1 split: ${M2_M1_RUN:-$M2_PROJECT/runs/m1_20261018_022316}"
 python -u "$CODE" && rm -rf "$M2_WORK_DIR"     # the run folder keeps everything needed; the scratch copy only takes space
 echo "done $(date); results in $M2_PROJECT/runs/"

@@ -17,8 +17,14 @@ conda activate "$ENV"
 # PyTorch first, pinned to a CUDA 12.1 build: the Explorer GPU nodes have driver 545 (CUDA 12.3), and the newest
 # PyTorch wheels (CUDA 13) cannot use it; cu121 also still supports the P100/V100 GPUs of courses-gpu.
 pip install -q torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu121
+# The rest at the exact versions of the reported runs (env_ie7615-m2_freeze.txt, see docs/PROVENANCE.md).
 # rembg[cpu]: onnxruntime-gpu failed on Colab (cuDNN mismatch); on a node with 8 CPUs the masks take ~15–30 min
-pip install -q "ultralytics>=8.3,<9" "rembg[cpu]" ipython pandas matplotlib "torch==2.5.1" "torchvision==0.20.1"
+FREEZE="$B/env_ie7615-m2_freeze.txt"
+if [ -f "$FREEZE" ]; then
+  pip install -q -r "$FREEZE" --extra-index-url https://download.pytorch.org/whl/cu121
+else    # older bundle without the freeze file: latest compatible versions (may differ from the reported runs)
+  pip install -q "ultralytics>=8.3,<9" "rembg[cpu]" ipython pandas matplotlib "torch==2.5.1" "torchvision==0.20.1"
+fi
 
 export YOLO_CONFIG_DIR="$B/ycfg"
 mkdir -p "$YOLO_CONFIG_DIR" "$B/run" "$B/logs"
