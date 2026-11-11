@@ -44,7 +44,7 @@ Model versions are marked with git tags per component, named `<component>-v<majo
 | [`detection-v1.1`](../../tree/detection-v1.1) | Same grid composites; masks reviewed, retrained on the cluster (D1-test mAP@0.5 0.928) |
 | [`detection-v2.0`](../../tree/detection-v2.0) | Method change: trained on D1 grid + D3 copy-paste composites (arm B of the A/B/C ablation, seed 42; registry `lab2real-detector` v2, alias `champion`). D1-test mAP@0.5 0.962, T-hard 0.940, real photos 0.906 (3-seed mean 0.864 ± 0.056). Includes the MLflow tracking, registry and FastAPI/Docker service |
 
-The tag `detection-v1.0` also holds the executed Colab notebook, report and figures of the submitted M2 run. Data, run outputs and the mask cache are not in the repository; the notebooks read the course dataset from Google Drive. The trained weights used by the demo (`mobilenetv2.keras`, `d1_yolov8n_best.pt`) are not published yet; they will be released once the models are final.
+The tag `detection-v1.0` also holds the executed Colab notebook, report and figures of the submitted M2 run. Data, run outputs and the mask cache are not in the repository; the notebooks read the course dataset from Google Drive. The trained weights used by the demo are release assets: `d1_yolov8n_best.pt` in [`detection-v2.0`](https://github.com/Yiting0210/synthetic-to-real-object-detection/releases/tag/detection-v2.0) and `mobilenetv2_others.keras` in [`classification-v1.1`](https://github.com/Yiting0210/synthetic-to-real-object-detection/releases/tag/classification-v1.1), with their SHA-256 in the release notes.
 
 ## Project scope
 
@@ -192,7 +192,7 @@ The course images are not in the repository: they were taken by the course parti
    ```
 
 5. **Tracking, registry, service:** run `mlops/tools/import_runs.py`, `register_models.py` and `export_bundle.py --alias champion --to-models`, then `pytest` and the Docker commands (see [MLOps](#mlops-tracking-registry-and-inference-service)).
-6. **Demo:** copy `mobilenetv2.keras` from Drive into `models/` (the detector is already there after step 5) and follow [`demo/README.md`](demo/README.md).
+6. **Demo:** download `mobilenetv2_others.keras` from the release `classification-v1.1` into `models/` (the detector is already there after step 5, or download it from the release `detection-v2.0`) and follow [`demo/README.md`](demo/README.md).
 
 Environment: the cluster job installs its own packages (`detection/cluster/setup_env.sh`; the exact versions of the reported runs are in [`detection/cluster/env_ie7615-m2_freeze.txt`](detection/cluster/env_ie7615-m2_freeze.txt)); the local tools (evaluation, MLflow, service, demo) run in one Python 3.11 environment from [`requirements-local.txt`](requirements-local.txt). Seeds fix the data and the training order, but GPU kernels are not bit-exact: expect differences in the third decimal between runs on different GPUs (see the ± columns in the ablation table).
 

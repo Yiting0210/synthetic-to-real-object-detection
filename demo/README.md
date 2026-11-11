@@ -10,13 +10,14 @@ Course requirements (due Nov 3): 1) the object detection model is complete; 2) l
 
 ## 1. Get the models (once)
 
-Both tools read the repository-level `../models/` folder (change it with `--models-dir`). `classes.json` and `selection.json` are already there. The two weight files are not in git: export the detector from the registry and copy the classifier from Drive into `../models/`:
+Both tools read the repository-level `../models/` folder (change it with `--models-dir`). `classes.json` and `selection.json` are already there. The weight files are not in git: download them from the GitHub releases into `../models/` (or export the detector from the registry):
 
 | File | Source |
 |---|---|
 | `classes.json` | in git; from `IE7615_project/runs/m1_20261018_022316/data/classes.json` |
-| `mobilenetv2.keras` | Drive `IE7615_project/runs/m1_20261018_022316/models/mobilenetv2.keras` |
-| `d1_yolov8n_best.pt` | registry `champion` (arm B, seed 42): `python mlops/tools/export_bundle.py --alias champion --to-models` from the repository root |
+| `mobilenetv2_others.keras` | release [`classification-v1.1`](https://github.com/Yiting0210/synthetic-to-real-object-detection/releases/tag/classification-v1.1); 21-class classifier (20 IDs + `OTHERS`), used when present |
+| `mobilenetv2.keras` | optional 20-class fallback; Drive `IE7615_project/runs/m1_20261018_022316/models/mobilenetv2.keras` |
+| `d1_yolov8n_best.pt` | release [`detection-v2.0`](https://github.com/Yiting0210/synthetic-to-real-object-detection/releases/tag/detection-v2.0), or registry `champion` (arm B, seed 42): `python mlops/tools/export_bundle.py --alias champion --to-models` from the repository root |
 | `selection.json` | in git; written by the same export (confidence threshold chosen on D1-val + hard-val: 0.70) |
 
 The demo images in `examples/{single,multi}/` come from the earlier retrained run `m2_20261103_225708`. They are built only from test-split photos, so they stay held out for the arm B detector, but the test notes and the live demo script below were measured with that earlier detector (threshold 0.55).

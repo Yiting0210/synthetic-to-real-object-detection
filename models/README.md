@@ -1,6 +1,6 @@
 # Models
 
-One folder for both models, read by `demo/predict.py`, `demo/demo_app.py` and the service fallback. The weight files are not in git. The detector files are exported from the MLflow registry (`python mlops/tools/export_bundle.py --alias champion --to-models`); the classifier weights come from Drive.
+One folder for both models, read by `demo/predict.py`, `demo/demo_app.py` and the service fallback. The weight files are not in git; `d1_yolov8n_best.pt` and `mobilenetv2_others.keras` are assets of the GitHub releases [`detection-v2.0`](https://github.com/Yiting0210/synthetic-to-real-object-detection/releases/tag/detection-v2.0) and [`classification-v1.1`](https://github.com/Yiting0210/synthetic-to-real-object-detection/releases/tag/classification-v1.1). The detector files can also be exported from the MLflow registry (`python mlops/tools/export_bundle.py --alias champion --to-models`); the 20-class `mobilenetv2.keras` comes from Drive.
 
 | File | What it is | In git |
 |---|---|---|
