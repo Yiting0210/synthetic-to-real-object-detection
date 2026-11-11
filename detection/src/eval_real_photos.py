@@ -13,9 +13,10 @@ Per model:
     recall per class, precision,
     false alarms = detections of the 18 classes that are not in the photos,
     other false positives = mug/roll detections that match no box (bad location or duplicate)
-Writes detection/results/real_photos/README.md, and detection/results/real_photos/predictions/<run>/ (images with boxes,
+Writes detection/results/real_photos/README.md and metrics.json (read by mlops/tools/import_runs.py), and detection/results/real_photos/predictions/<run>/ (images with boxes,
 seed 1 of each arm; not in git).
 """
+import json
 import re
 import statistics as st
 from pathlib import Path
@@ -132,10 +133,11 @@ def evaluate(run, gt, save_dir=None):
 def main():
     gt = load_gt()
     runs = sorted(RUNS.glob("m2_20261108_*_arm*_seed*"))
-    res = {}
+    res, names = {}, {}
     for run in runs:
         arm = re.search(r"arm([ABC])_seed(\d+)", run.name)
         key = (arm.group(1), int(arm.group(2)))
+        names[key] = run.name
         save = OUT / "predictions" / run.name if key[1] == 1 else None
         res[key] = evaluate(run, gt, save)
         print(run.name, {k: (round(v, 3) if isinstance(v, float) else v) for k, v in res[key].items()}, flush=True)
@@ -166,7 +168,11 @@ def main():
             "the paper roll is a different roll from the one in training (same category, different instance)."]
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "README.md").write_text("\n".join(out) + "\n", encoding="utf-8")
-    print("wrote", OUT / "README.md")
+    # Same numbers, unrounded, for mlops/tools/import_runs.py (the README is for reading only)
+    record = dict(photos=n_img, boxes=n_box, classes={"6": "OBJ011", "2": "OBJ002"},
+                  runs={names[k]: dict(arm=k[0], seed=k[1], **r) for k, r in sorted(res.items())})
+    (OUT / "metrics.json").write_text(json.dumps(record, indent=1) + "\n", encoding="utf-8")
+    print("wrote", OUT / "README.md", "and", OUT / "metrics.json")
 
 
 if __name__ == "__main__":

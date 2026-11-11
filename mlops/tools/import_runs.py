@@ -6,7 +6,7 @@ Sources (all already in the repository / run folders):
     M2 detection        runs/m2_20261108_*_arm{A,B,C}_seed{42,1,2}/
                         (records/run_yolov8n_d1.json, figures/train_args.yaml, figures/train_results.csv,
                          models/d1_yolov8n_best.pt, M2_results_for_report.md)
-    real photos         detection/results/real_photos/README.md (per-run table)
+    real photos         detection/results/real_photos/metrics.json (written by detection/src/eval_real_photos.py)
 
 Each source run becomes one MLflow run. MLflow's own run ID is never overwritten: the original ID is the tag
 `source_run_id`, and mlops/logs/run_id_map.csv maps source run ↔ MLflow run. Re-running skips runs already imported
@@ -38,7 +38,7 @@ from mlflow.entities import Metric, Param, RunTag  # noqa: E402
 RUNS = REPO / "runs"
 M1_DIR = REPO / "classification/results/m1"
 OPENSET_DIR = REPO / "classification/results/openset"
-REAL_MD = REPO / "detection/results/real_photos/README.md"
+REAL_JSON = REPO / "detection/results/real_photos/metrics.json"
 M2_PATTERN = "m2_20261108_*_arm[ABC]_seed*"
 
 EXP_M1, EXP_OPENSET, EXP_M2 = "M1-classification", "openset-rejection", "M2-detection"
@@ -253,23 +253,11 @@ def import_openset(c, force, mapping):
 # ---------- M2 detection ----------
 
 def real_photo_rows():
-    """Per-run rows of the real-photo table, keyed by (arm, seed)."""
-    rows, header = {}, None
-    in_table = False
-    for line in REAL_MD.read_text(encoding="utf-8").splitlines():
-        if line.startswith("## Per run"):
-            in_table = True
-            continue
-        if not in_table or not line.startswith("|"):
-            continue
-        cells = [x.strip() for x in line.strip("|").split("|")]
-        if header is None:
-            header = cells
-        elif not set(cells[0]) <= set("-: "):
-            m = re.match(r"([ABC]) seed (\d+)", cells[0])
-            if m:
-                rows[(m.group(1), int(m.group(2)))] = dict(zip(header, cells))
-    return rows
+    """Per-run real-photo metrics, keyed by (arm, seed)."""
+    if not REAL_JSON.exists():
+        return {}
+    runs = json.loads(REAL_JSON.read_text(encoding="utf-8"))["runs"]
+    return {(r["arm"], int(r["seed"])): r for r in runs.values()}
 
 
 REAL_KEYS = {"thr": "threshold", "AP50 OBJ011": "ap50_OBJ011", "AP50 OBJ002": "ap50_OBJ002",
@@ -360,7 +348,7 @@ def import_m2(c, force, mapping):
         if row:
             for col, k in REAL_KEYS.items():
                 w.metric(f"test.real.{k}", row.get(col))
-        w.tag("real_photo_results", "logged as test.real.*" if row else "not in detection/results/real_photos/README.md")
+        w.tag("real_photo_results", "logged as test.real.*" if row else "not in detection/results/real_photos/metrics.json")
         with open(d / "figures/train_results.csv", encoding="utf-8") as f:
             for e in csv.DictReader(f):
                 step = int(float(e["epoch"]))

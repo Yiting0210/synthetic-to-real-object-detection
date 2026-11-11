@@ -1,0 +1,217 @@
+{
+ "photos": 29,
+ "boxes": 58,
+ "classes": {
+  "6": "OBJ011",
+  "2": "OBJ002"
+ },
+ "runs": {
+  "m2_20261108_135032_armA_seed1": {
+   "arm": "A",
+   "seed": 1,
+   "thr": 0.25,
+   "AP50 OBJ011": 0.8937626615475567,
+   "AP50 OBJ002": 0.7320076045335634,
+   "mAP50 (2 classes)": 0.81288513304056,
+   "recall OBJ011": 0.8275862068965517,
+   "recall OBJ002": 0.6551724137931034,
+   "precision": 0.589041095890411,
+   "false alarms (other classes)": 18,
+   "other FP (bad box / duplicate)": 12,
+   "alarm_classes": {
+    "OBJ001": 2,
+    "OBJ125": 1,
+    "OBJ201": 1,
+    "OBJ529": 7,
+    "OBJ004": 2,
+    "OBJ608": 3,
+    "OBJ108": 2
+   }
+  },
+  "m2_20261108_141110_armA_seed2": {
+   "arm": "A",
+   "seed": 2,
+   "thr": 0.15,
+   "AP50 OBJ011": 0.8447328506223143,
+   "AP50 OBJ002": 0.8068069861173309,
+   "mAP50 (2 classes)": 0.8257699183698226,
+   "recall OBJ011": 0.8620689655172413,
+   "recall OBJ002": 0.5517241379310345,
+   "precision": 0.5125,
+   "false alarms (other classes)": 28,
+   "other FP (bad box / duplicate)": 11,
+   "alarm_classes": {
+    "OBJ201": 2,
+    "OBJ608": 12,
+    "OBJ001": 1,
+    "OBJ108": 1,
+    "OBJ004": 4,
+    "OBJ529": 6,
+    "OBJ125": 1,
+    "OBJ523": 1
+   }
+  },
+  "m2_20261108_054413_armA_seed42": {
+   "arm": "A",
+   "seed": 42,
+   "thr": 0.15,
+   "AP50 OBJ011": 0.8912444303615528,
+   "AP50 OBJ002": 0.7314210414874347,
+   "mAP50 (2 classes)": 0.8113327359244937,
+   "recall OBJ011": 0.8620689655172413,
+   "recall OBJ002": 0.5172413793103449,
+   "precision": 0.5633802816901409,
+   "false alarms (other classes)": 26,
+   "other FP (bad box / duplicate)": 5,
+   "alarm_classes": {
+    "OBJ201": 3,
+    "OBJ608": 3,
+    "OBJ001": 1,
+    "OBJ777": 1,
+    "OBJ523": 5,
+    "OBJ222": 2,
+    "OBJ125": 1,
+    "OBJ004": 3,
+    "OBJ529": 7
+   }
+  },
+  "m2_20261108_135138_armB_seed1": {
+   "arm": "B",
+   "seed": 1,
+   "thr": 0.55,
+   "AP50 OBJ011": 0.9663821918712387,
+   "AP50 OBJ002": 0.8031246458942998,
+   "mAP50 (2 classes)": 0.8847534188827693,
+   "recall OBJ011": 0.9655172413793104,
+   "recall OBJ002": 0.8275862068965517,
+   "precision": 0.5,
+   "false alarms (other classes)": 25,
+   "other FP (bad box / duplicate)": 27,
+   "alarm_classes": {
+    "OBJ201": 2,
+    "OBJ001": 1,
+    "OBJ529": 9,
+    "OBJ222": 1,
+    "OBJ108": 2,
+    "OBJ608": 4,
+    "OBJ777": 3,
+    "OBJ523": 2,
+    "OBJ123": 1
+   }
+  },
+  "m2_20261108_143042_armB_seed2": {
+   "arm": "B",
+   "seed": 2,
+   "thr": 0.6,
+   "AP50 OBJ011": 0.8807156976769427,
+   "AP50 OBJ002": 0.7190932540222627,
+   "mAP50 (2 classes)": 0.7999044758496027,
+   "recall OBJ011": 0.8620689655172413,
+   "recall OBJ002": 0.6896551724137931,
+   "precision": 0.5555555555555556,
+   "false alarms (other classes)": 21,
+   "other FP (bad box / duplicate)": 15,
+   "alarm_classes": {
+    "OBJ001": 3,
+    "OBJ529": 10,
+    "OBJ201": 1,
+    "OBJ222": 1,
+    "OBJ608": 3,
+    "OBJ523": 3
+   }
+  },
+  "m2_20261108_054413_armB_seed42": {
+   "arm": "B",
+   "seed": 42,
+   "thr": 0.7,
+   "AP50 OBJ011": 0.9652773111453254,
+   "AP50 OBJ002": 0.8473592004569143,
+   "mAP50 (2 classes)": 0.9063182558011198,
+   "recall OBJ011": 0.8275862068965517,
+   "recall OBJ002": 0.7586206896551724,
+   "precision": 0.5974025974025974,
+   "false alarms (other classes)": 21,
+   "other FP (bad box / duplicate)": 10,
+   "alarm_classes": {
+    "OBJ001": 3,
+    "OBJ108": 1,
+    "OBJ529": 4,
+    "OBJ608": 9,
+    "OBJ222": 1,
+    "OBJ523": 3
+   }
+  },
+  "m2_20261108_183715_armC_seed1": {
+   "arm": "C",
+   "seed": 1,
+   "thr": 0.55,
+   "AP50 OBJ011": 0.7039867489046897,
+   "AP50 OBJ002": 0.6846525354452118,
+   "mAP50 (2 classes)": 0.6943196421749507,
+   "recall OBJ011": 0.6896551724137931,
+   "recall OBJ002": 0.7931034482758621,
+   "precision": 0.2606060606060606,
+   "false alarms (other classes)": 44,
+   "other FP (bad box / duplicate)": 78,
+   "alarm_classes": {
+    "OBJ001": 3,
+    "OBJ529": 17,
+    "OBJ201": 3,
+    "OBJ007": 6,
+    "OBJ608": 4,
+    "OBJ108": 4,
+    "OBJ777": 6,
+    "OBJ123": 1
+   }
+  },
+  "m2_20261108_185747_armC_seed2": {
+   "arm": "C",
+   "seed": 2,
+   "thr": 0.5,
+   "AP50 OBJ011": 0.7971463668783639,
+   "AP50 OBJ002": 0.6743246935629916,
+   "mAP50 (2 classes)": 0.7357355302206778,
+   "recall OBJ011": 0.8275862068965517,
+   "recall OBJ002": 0.7931034482758621,
+   "precision": 0.3092105263157895,
+   "false alarms (other classes)": 46,
+   "other FP (bad box / duplicate)": 59,
+   "alarm_classes": {
+    "OBJ529": 15,
+    "OBJ007": 4,
+    "OBJ001": 4,
+    "OBJ608": 13,
+    "OBJ777": 3,
+    "OBJ108": 1,
+    "OBJ111": 1,
+    "OBJ004": 4,
+    "OBJ523": 1
+   }
+  },
+  "m2_20261108_183715_armC_seed42": {
+   "arm": "C",
+   "seed": 42,
+   "thr": 0.5,
+   "AP50 OBJ011": 0.7365770751501554,
+   "AP50 OBJ002": 0.679066646341004,
+   "mAP50 (2 classes)": 0.7078218607455797,
+   "recall OBJ011": 0.6896551724137931,
+   "recall OBJ002": 0.8620689655172413,
+   "precision": 0.26785714285714285,
+   "false alarms (other classes)": 57,
+   "other FP (bad box / duplicate)": 66,
+   "alarm_classes": {
+    "OBJ007": 11,
+    "OBJ529": 17,
+    "OBJ201": 5,
+    "OBJ001": 2,
+    "OBJ777": 5,
+    "OBJ608": 6,
+    "OBJ222": 1,
+    "OBJ108": 3,
+    "OBJ123": 5,
+    "OBJ523": 2
+   }
+  }
+ }
+}
