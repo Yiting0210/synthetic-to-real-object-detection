@@ -7,12 +7,12 @@ Writes to detection/cluster/IE7615_project/cache/ (not in git); upload both file
   others.zip             classification/others/images_OTHERS/ and unseen_test/
 Run it again after adding or changing photos.
 """
-import csv, hashlib, zipfile
+import csv, hashlib, os, zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-RAW = ROOT / "detection" / "cluster" / "data" / "raw"
-MANIFEST = ROOT / "detection" / "cluster" / "IE7615_project" / "runs" / "m1_20261018_022316" / "data" / "split_manifest.csv"
+RAW = Path(os.environ.get("IE7615_RAW_DIR", ROOT / "detection" / "cluster" / "data" / "raw"))   # the 20 images_OBJxxx folders
+MANIFEST = ROOT / "classification" / "results" / "m1" / "data" / "split_manifest.csv"      # the M1 split (in git)
 OTHERS = ROOT / "classification" / "others"
 OUT = ROOT / "detection" / "cluster" / "IE7615_project" / "cache"
 IMG_EXT = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".heic", ".heif", ".tif", ".tiff"}

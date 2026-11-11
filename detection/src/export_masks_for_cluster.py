@@ -8,6 +8,8 @@ Writes cluster/upload_masks/ with
     fixed/<id>.png    the SAM mask that was checked, under the name the pipeline reads for `fixed`
 Upload both into ~/hpc_m2/IE7615_project/masks/ on the cluster. The run then uses exactly the
 masks that were checked and needs no SAM weights.
+Not needed any more for new runs: the job can run SAM itself from the `sam` rows (detection/cluster/README.md).
+The reported runs used this upload (docs/PROVENANCE.md).
 """
 import csv
 import shutil

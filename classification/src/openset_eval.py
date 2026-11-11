@@ -12,7 +12,7 @@
    AUROC (test course images vs unseen photos) measures each method without any threshold.
 Writes classification/results/openset/<run>/.
 """
-import csv, hashlib, json, math, re, subprocess, sys, shutil
+import csv, hashlib, json, math, os, re, subprocess, sys, shutil
 from datetime import datetime, timezone
 from pathlib import Path
 import numpy as np
@@ -23,7 +23,7 @@ from openset_methods import (ModelOutputs, METHODS, class_prototypes, rejected, 
                              ranking_score, auroc, auroc_ci)
 
 ROOT = Path(__file__).resolve().parents[2]
-RAW = ROOT / "detection" / "cluster" / "data" / "raw"
+RAW = Path(os.environ.get("IE7615_RAW_DIR", ROOT / "detection" / "cluster" / "data" / "raw"))   # the 20 images_OBJxxx folders
 M1_DATA = ROOT / "classification" / "results" / "m1" / "data"
 OTHERS_ROOT = ROOT / "classification" / "others"
 MODELS = ROOT / "models"

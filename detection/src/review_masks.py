@@ -26,12 +26,17 @@ Keys:
     q / Esc     quit
 
 Every decision is written to the CSV at once. The first write also keeps a copy as
-mask_review_backup.csv next to it.
+mask_review_backup.csv next to it (gitignored).
+
+Files: decisions go to detection/data/masks/mask_review.csv, the copy in git that the cluster job uses
+(override with MASK_REVIEW). The mask cache, SAM results and source images stay in the gitignored cluster
+folder detection/cluster/ (IE7615_project/masks/, data/raw/; override the images with IE7615_RAW_DIR).
 """
 import argparse
 import csv
 import io
 import json
+import os
 import shutil
 import tkinter as tk
 import zipfile
@@ -41,12 +46,13 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageTk
 
 HERE = Path(__file__).resolve().parent
+REPO = HERE.parents[1]
 ROOT = HERE.parent / "cluster"                       # detection/cluster: same layout as the cluster
 PROJECT = ROOT / "IE7615_project"
-MANIFEST = PROJECT / "runs" / "m1_20261018_022316" / "data" / "split_manifest.csv"
+MANIFEST = REPO / "classification" / "results" / "m1" / "data" / "split_manifest.csv"     # the M1 split (in git)
 MASK_ZIP = PROJECT / "masks" / "raw_u2net.zip"
-REVIEW = PROJECT / "masks" / "mask_review.csv"
-RAW = ROOT / "data" / "raw"
+REVIEW = Path(os.environ.get("MASK_REVIEW", HERE.parent / "data" / "masks" / "mask_review.csv"))   # in git
+RAW = Path(os.environ.get("IE7615_RAW_DIR", ROOT / "data" / "raw"))
 SIZE = 224          # masks and boxes are in pixels of the 224x224 image
 SCALE = 3           # shown 3x larger
 FIELDS = ["image_id", "action", "box", "note", "auto_flags"]

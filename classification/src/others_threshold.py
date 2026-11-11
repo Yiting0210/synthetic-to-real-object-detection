@@ -12,14 +12,14 @@ Rebuilds the exact inputs of the Colab run m1o_20261107_113839 (M1 split for the
 pHash groups and seeded split for OTHERS) and first checks that the plain 21-class predictions reproduce the Colab numbers.
 Writes classification/results/others/threshold/.
 """
-import csv, json, math, re
+import csv, json, math, os, re
 from pathlib import Path
 import numpy as np
 from PIL import Image, ImageOps
 
 ROOT = Path(__file__).resolve().parents[2]
-RAW = ROOT / "detection" / "cluster" / "data" / "raw"
-M1_DATA = ROOT / "detection" / "cluster" / "IE7615_project" / "runs" / "m1_20261018_022316" / "data"
+RAW = Path(os.environ.get("IE7615_RAW_DIR", ROOT / "detection" / "cluster" / "data" / "raw"))   # the 20 images_OBJxxx folders
+M1_DATA = ROOT / "classification" / "results" / "m1" / "data"      # the M1 split (in git)
 OTHERS_ROOT = ROOT / "classification" / "others"
 MODEL = ROOT / "models" / "mobilenetv2_others.keras"
 CLASSES_FILE = ROOT / "models" / "classes_with_others.json"
