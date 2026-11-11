@@ -1,5 +1,9 @@
-tensorflow>=2.16,<2.22
-ultralytics>=8.3,<9
-gradio>=4.40,<6
-pillow
-numpy
+# Demo packages (laptop, CPU), at the versions the demo was tested with (conda env ie7615-demo, Python 3.11).
+# PyTorch CPU first:  pip install torch==2.15.0 torchvision==0.29.2 --index-url https://download.pytorch.org/whl/cpu
+# The full local environment (demo + evaluation + MLflow + service tests) is ../requirements-local.txt.
+tensorflow==2.21.0
+keras==3.15.1
+ultralytics==8.4.192
+gradio==5.50.0
+pillow==11.3.0
+numpy==2.4.6

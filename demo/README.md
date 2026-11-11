@@ -6,7 +6,7 @@ Course requirements (due Nov 3): 1) the object detection model is complete; 2) l
 |---|---|
 | `predict.py` | Command-line interface. `single` uses the M1 classifier (MobileNetV2); `multi` uses the M2 detector (YOLOv8n). Prints JSON with course IDs (e.g. `OBJ011`) and boxes in the input image's pixels. |
 | `demo_app.py` | Local web page (Gradio) with one tab per mode, used for the live demo. |
-| `requirements.txt` | Packages for the laptop (CPU only). |
+| `requirements.txt` | Packages for the laptop (CPU only), pinned to the tested versions. |
 
 ## 1. Get the models (once)
 
@@ -34,6 +34,10 @@ conda create -n ie7615-demo python=3.11 -y
 
 ```bash
 conda env config vars set PYTHONNOUSERSITE=1 -n ie7615-demo
+```
+
+```bash
+conda run -n ie7615-demo pip install torch==2.15.0 torchvision==0.29.2 --index-url https://download.pytorch.org/whl/cpu
 ```
 
 ```bash

@@ -21,6 +21,8 @@ This project compares grid concatenation with mask-based copy-paste training dat
 | `demo/` | `predict.py` (single image → ID; multi-object image → IDs and boxes) and `demo_app.py` (local Gradio demo) with example images; see `demo/README.md` |
 | `mlops/` | `tools/` (MLflow import, registration, bundle export, rollback demo), `logs/` (run-ID map, rollback log); the MLflow store `store/` is local only |
 | `service/` | FastAPI inference service (`POST /detect`, `GET /health`), pytest tests and a CPU-only Dockerfile |
+| `docs/` | `PROVENANCE.md`: commit, Slurm job, GPU, environment and input checksums of each reported detection run |
+| `tools/` | `percent2ipynb.py`: turns a percent-format script (`# %%` cells) into a notebook for Colab |
 
 Local only (gitignored): `runs/` (run folders downloaded from the cluster), `mlops/store/` (MLflow database and artifacts), `model_bundles/` (exported bundles). Results reach git as generated summaries; every run is in MLflow; the model in use is the registry alias `champion`.
 
@@ -162,7 +164,7 @@ The course images are not in the repository: they were taken by the course parti
 
 ## Reproduce
 
-1. **Data** (needs course access): put the 20 `images_OBJxxx` folders into `detection/cluster/data/raw/`; copy `classification/results/m1/data/classes.json` and `split_manifest.csv` into `detection/cluster/IE7615_project/runs/m1_20261018_022316/data/`; copy `detection/data/masks/mask_review.csv` into `detection/cluster/IE7615_project/masks/`.
+1. **Data** (needs course access): put the 20 `images_OBJxxx` folders into `detection/cluster/data/raw/`; for the zip upload, copy `classification/results/m1/data/classes.json` and `split_manifest.csv` into `detection/cluster/IE7615_project/runs/m1_20261018_022316/data/` (a git checkout on the cluster reads them from git, see [`detection/cluster/README.md`](detection/cluster/README.md)); copy `detection/data/masks/mask_review.csv` into `detection/cluster/IE7615_project/masks/`.
 2. **Classification (M1, optional):** open `classification/notebooks/m1_classification.ipynb` in Colab with a T4 GPU and run all cells. Detection does not need it; it only reads the two files above.
 3. **Detection, nine runs** on the Explorer cluster (setup in [`detection/cluster/README.md`](detection/cluster/README.md); about 10 min per run on a V100):
 
@@ -171,6 +173,8 @@ The course images are not in the repository: they were taken by the course parti
    ```
 
    The data are generated with a fixed seed, so all arms and seeds share the same source objects and the same test sets; `M2_TRAIN_SEED` changes only training. `M2_SMOKE=1` runs a 1-epoch check on a few images (also on a CPU).
+
+   On Colab instead: `m2_detection.py` is the notebook source in percent format (`# %%` cells); convert it with `python tools/percent2ipynb.py detection/src/m2_detection.py m2_detection.ipynb` (needs `nbformat`) and open the notebook in Colab. The submitted M2 notebook itself is in the tag `detection-v1.0` (`m2/m2_detection.ipynb`).
 4. **Summaries** (repository root, after downloading the run folders into `runs/`):
 
    ```bash
@@ -184,13 +188,15 @@ The course images are not in the repository: they were taken by the course parti
 5. **Tracking, registry, service:** run `mlops/tools/import_runs.py`, `register_models.py` and `export_bundle.py --alias champion --to-models`, then `pytest` and the Docker commands (see [MLOps](#mlops-tracking-registry-and-inference-service)).
 6. **Demo:** copy `mobilenetv2.keras` from Drive into `models/` (the detector is already there after step 5) and follow [`demo/README.md`](demo/README.md).
 
-Environment: the cluster job installs its own packages (`detection/cluster/setup_env.sh`); the local tools (evaluation, MLflow, service, demo) run in one Python 3.11 environment from [`requirements-local.txt`](requirements-local.txt). Seeds fix the data and the training order, but GPU kernels are not bit-exact: expect differences in the third decimal between runs on different GPUs (see the ± columns in the ablation table).
+Environment: the cluster job installs its own packages (`detection/cluster/setup_env.sh`; the exact versions of the reported runs are in [`detection/cluster/env_ie7615-m2_freeze.txt`](detection/cluster/env_ie7615-m2_freeze.txt)); the local tools (evaluation, MLflow, service, demo) run in one Python 3.11 environment from [`requirements-local.txt`](requirements-local.txt). Seeds fix the data and the training order, but GPU kernels are not bit-exact: expect differences in the third decimal between runs on different GPUs (see the ± columns in the ablation table).
+
+Code version of the reported runs: their records say `git_commit: not recorded` (the cluster ran a copied script outside git). [`docs/PROVENANCE.md`](docs/PROVENANCE.md) links each run to its commit, Slurm job, GPU, environment and input checksums, checked against the files kept on the cluster.
 
 ## MLOps: tracking, registry and inference service
 
 All commands run from the repository root in a Python 3.11 environment with `ultralytics`, `mlflow`, `fastapi`, `uvicorn` and `pytest`. The run folders under `runs/` (weights, manifests) are local and not in git.
 
-**Experiment tracking (MLflow, no retraining).** `mlops/tools/import_runs.py` reads the existing run records and logs them into a SQLite-backed MLflow store in `mlops/store/` (`mlflow.db`, artifacts in `mlartifacts/`; gitignored):
+**Experiment tracking (MLflow, no retraining).** Tracking is done after the runs, not during them: the training code (Colab notebooks, the cluster job) does not call MLflow and needs no tracking server; each run writes JSON/CSV records and a report into its run folder. `mlops/tools/import_runs.py` reads those records and logs them into a SQLite-backed MLflow store in `mlops/store/` (`mlflow.db`, artifacts in `mlartifacts/`; gitignored):
 
 - **Experiments:** `M1-classification` (4 classifiers), `openset-rejection` (1 parent run with 6 method runs) and `M2-detection` (arm A/B/C × seeds 42/1/2).
 - **Each run logs:**
@@ -245,11 +251,14 @@ MODEL_ALIAS=champion uvicorn service.app:app --port 8000
 curl -F "file=@detection/data/real_photos/images/IMG_2291.jpg" http://127.0.0.1:8000/detect
 ```
 
-**Tests.** `pytest` (config in `pytest.ini`) runs `service/tests/` on fixed photos from `detection/data/real_photos/images` against their hand-drawn labels. The tests cover:
+**Tests.** `pytest` (config in `pytest.ini`) runs `service/tests/`. Without weights (fresh clone) 12 tests run and the rest are skipped, with the reason printed:
 
-- original-coordinate boxes, EXIF rotation and empty scenes
-- invalid or corrupt images, class-map mismatch and a missing model
-- tampered bundles, alias resolution and the path fallback
+- `test_no_weights.py`: the copies in `models/` equal their sources in `classification/results/`, the class maps and `selection.json` are valid, and the loader rejects missing weights, non-bundles and tampered bundles
+- `test_demo_parity.py` (needs `models/d1_yolov8n_best.pt`): `demo/predict.py` and the service return the same objects for the same photo and threshold
+- `test_service.py` (needs the arm B seed-42 run folder in `runs/`): the API on fixed photos from `detection/data/real_photos/images` against their hand-drawn labels:
+  - original-coordinate boxes, EXIF rotation and empty scenes
+  - invalid or corrupt images, class-map mismatch and a missing model
+  - tampered bundles, alias resolution and the path fallback
 
 ```bash
 pytest
