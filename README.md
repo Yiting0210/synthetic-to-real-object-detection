@@ -6,7 +6,12 @@ Can YOLOv8 trained on synthetic composites generalize to real photographs with c
 
 This project compares grid concatenation with mask-based copy-paste training data, evaluates synthetic-to-real generalization, and adds ML-specific engineering: experiment tracking and a model registry with rollback. A separate Keras/TensorFlow benchmark supports single-object classification.
 
-> **Status (November 9, 2026):** course milestones M1–M3 are done. Since then: masks of the seven weakest classes reviewed, the copy-paste (D3) comparison run with three seeds per arm (D1 only, D1+D3, D3 only), a real multi-object photo test, and MLflow tracking, a model registry with rollback, and a FastAPI/Docker service. The CPU runtime comparison is still planned.
+> **Status (November 11, 2026):** course milestones M1–M3 are done. Since then:
+> - masks of the seven weakest classes reviewed;
+> - the copy-paste (D3) comparison run with three seeds per arm (D1 only, D1+D3, D3 only), and a real multi-object photo test;
+> - MLflow tracking with a re-evaluation check of every registered version, report tables exported from MLflow, a model registry with rollback, and a FastAPI/Docker service with a startup readiness check.
+>
+> Postponed: the CPU runtime comparison (ONNX / OpenVINO export) and the `/classify` endpoint.
 
 ## Repository contents
 
@@ -58,18 +63,18 @@ The tag `detection-v1.0` also holds the executed Colab notebook, report and figu
 5. Report classification accuracy/macro-F1 and confusion matrices; detection mAP@0.5 and mAP@0.5:0.95; and real-case recall, matched-box IoU and false positives per image.
 6. Record configurations, seeds, code revisions, dataset checksums and model artifacts with MLflow (portable JSON/CSV records as a fallback). Store per-composite generation records for sample regeneration.
 
-**Compute plan:** M1 and the submitted M2 ran on Google Colab (Tesla T4); the retrained M2 ran on the Explorer cluster (Tesla P100, Slurm). The multi-seed detection comparison is planned for the university HPC cluster using Slurm (`detection/cluster/`), with Colab as fallback. Persist run outputs on storage appropriate to each environment. CPU deployment benchmarks name the exact machine and compare runtimes under matched conditions.
+**Compute plan:** M1 and the submitted M2 ran on Google Colab (Tesla T4); the retrained M2 ran on the Explorer cluster (Tesla P100, Slurm). The multi-seed detection comparison (3 arms × 3 seeds) also ran there as Slurm jobs (`detection/cluster/`; Tesla V100 / P100). Persist run outputs on storage appropriate to each environment. CPU deployment benchmarks name the exact machine and compare runtimes under matched conditions.
 
-## Planned engineering work
+## Engineering work
 
 The engineering scope is limited to ML-specific practices; data pipelines, monitoring and load testing are not part of this project.
 
-| Area | Implementation | Evidence to publish |
-| --- | --- | --- |
-| Experiment tracking | MLflow with a local SQLite backend; Colab and HPC run records (JSON/CSV) imported by script | Every reported number traces to a run with its code commit, configuration, data checksums and model |
-| Model registry and rollback | MLflow Model Registry; `champion` / `previous` aliases; exported model bundles with checksums | A recorded rollback to the previous version, confirmed through the service response |
-| Minimal inference service | FastAPI `POST /detect` (then `/classify`), Docker image with the model bundle mounted read-only, pytest | Tested API calls that report the model version |
-| Detector CPU inference | PyTorch FP32, ONNX Runtime FP32, OpenVINO FP32/INT8 | Accuracy, mean/p95 latency, memory, artifact size and load time under matched conditions |
+| Area | Implementation | Evidence | Status |
+| --- | --- | --- | --- |
+| Experiment tracking | MLflow with a local SQLite backend; Colab and HPC run records (JSON/CSV) imported by script | Every reported number traces to a run with its configuration, data checksums and model; registered versions re-evaluated (`mlops/logs/reevaluation.md`); report tables exported from MLflow | Done. Git commits of the training runs were not recorded and are not back-filled |
+| Model registry and rollback | MLflow Model Registry; `champion` / `previous` aliases; exported model bundles with checksums | A recorded rollback to the previous version, confirmed through the service response (`mlops/logs/rollback_demo.log`) | Done |
+| Minimal inference service | FastAPI `POST /detect`, Docker image with the model bundle mounted read-only, pytest | Tested API calls that report the model version; readiness check on a development image | Done; `POST /classify` postponed |
+| Detector CPU inference | PyTorch FP32, ONNX Runtime FP32, OpenVINO FP32/INT8 | Accuracy, mean/p95 latency, memory, artifact size and load time under matched conditions | Postponed |
 
 The four-runtime benchmark applies to the detector. The classifier's native correctness baseline is Keras/TensorFlow; any classifier export is checked against that baseline. No speed or accuracy number is published for an export that has not passed the class-map, preprocessing and coordinate checks.
 
@@ -80,8 +85,9 @@ The four-runtime benchmark applies to the detector. The classifier's native corr
 | M1 · Oct 17 | At least three distinct classifiers, comparison and justified selection; PDF report within five pages including the front page |
 | M2 · Oct 27 | Synthetic multi-object dataset, YOLOv8 training and ID/location outputs |
 | M3 · Nov 3 | Completed detection model and live single/multi-object demonstration |
-| M4 · Nov 10 | Final report and models; then detector runtime comparison (at least PyTorch FP32 vs OpenVINO INT8) |
-| Nov 11–24 | Remaining runtime measurements, FastAPI + Docker, MLflow import and Model Registry with a rollback demonstration, README results linked to runs |
+| M4 · Nov 10 | Final report and models |
+| Nov 8–11 (done) | MLflow import, Model Registry with a rollback demonstration, re-evaluation check, tables exported from MLflow, FastAPI + Docker |
+| Later (postponed) | Detector runtime comparison (PyTorch FP32 vs ONNX Runtime / OpenVINO, INT8) and `POST /classify` |
 | December (optional) | Webcam demo and a single-object data-drift case study |
 
 Course deliverables take priority. If dates move, document the revised schedule; do not present pending features as completed.
@@ -238,7 +244,7 @@ python mlops/tools/export_tables.py --check
   - promotes B and serves it, from the bundle and by alias;
   - moves `champion` back to A and restarts the service;
   - checks that `/health` and `/detect` now report version 1.
-- The output is in [`mlops/logs/rollback_demo.log`](mlops/logs/rollback_demo.log) (recorded on Nov 8, before the folders were reorganized). The script leaves `champion` on version 1 (arm A); run `mlops/tools/register_models.py` on a fresh store, or move the alias back, to serve arm B again.
+- The output is in [`mlops/logs/rollback_demo.log`](mlops/logs/rollback_demo.log) (recorded on Nov 8, before the folders were reorganized). The script ends with `champion` on version 1 (arm A). Afterwards `champion` was moved back to version 2 (arm B), the version served now; rerunning the script moves it to version 1 again.
 
 ```bash
 python mlops/tools/register_models.py
