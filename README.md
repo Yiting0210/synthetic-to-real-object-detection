@@ -37,7 +37,7 @@ Model versions are marked with git tags per component, named `<component>-v<majo
 | [`classification-v1.1`](../../tree/classification-v1.1) | Same model and training recipe; data adds an `OTHERS` class (100 photos), setting adds a rejection threshold chosen on validation |
 | [`detection-v1.0`](../../tree/detection-v1.0) | YOLOv8n on grid composites, as submitted for M2 (Colab run, D1-test mAP@0.5 0.908), with the earlier `m1/`, `m2/`, `m3/` layout |
 | [`detection-v1.1`](../../tree/detection-v1.1) | Same grid composites; masks reviewed, retrained on the cluster (D1-test mAP@0.5 0.928) |
-| [`demo`](../../tree/demo) | Local demo (M3): single-object ID with OTHERS, multi-object IDs and boxes |
+| [`detection-v2.0`](../../tree/detection-v2.0) | Method change: trained on D1 grid + D3 copy-paste composites (arm B of the A/B/C ablation, seed 42; registry `lab2real-detector` v2, alias `champion`). D1-test mAP@0.5 0.962, T-hard 0.940, real photos 0.906 (3-seed mean 0.864 ± 0.056). Includes the MLflow tracking, registry and FastAPI/Docker service |
 
 The tag `detection-v1.0` also holds the executed Colab notebook, report and figures of the submitted M2 run. Data, run outputs and the mask cache are not in the repository; the notebooks read the course dataset from Google Drive. The trained weights used by the demo (`mobilenetv2.keras`, `d1_yolov8n_best.pt`) are not published yet; they will be released once the models are final.
 
