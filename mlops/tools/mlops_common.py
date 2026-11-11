@@ -18,6 +18,9 @@ TRACKING_URI = "sqlite:///" + DB.as_posix()
 BUNDLES = REPO / "model_bundles"
 
 DETECTOR_MODEL = "lab2real-detector"          # registered model name for the YOLOv8n detector
+CLASSIFIER_MODEL = "lab2real-classifier"      # registered model name for the M1 Keras classifier
+RUNS = REPO / "runs"                           # run folders downloaded from the cluster (not in git)
+READINESS_SUBDIR = "readiness"                # model/readiness/: development image + expected output for the startup check
 MODEL_SUBDIR = "model"                        # run artifact folder that a model version points to
 
 

@@ -10,6 +10,12 @@ With nothing set it uses the repository's models/d1_yolov8n_best.pt (+ models/cl
 
 A model directory (bundle, or a registry version's artifact folder) holds:
     <weights>.pt   classes.json   serving.json (imgsz, conf_threshold, nms_iou, weights, weights_sha256)   [bundle.json]
+    readiness/     one D1-val (development) image + expected.json: the detections the registered version gave on it
+
+Readiness check (proposal §7.7): before the service reports ready it runs the model on readiness/<image> and compares
+with expected.json (same classes, box IoU >= 0.9, confidence within 0.05; detections within 0.1 of the threshold
+may appear or vanish). A model without readiness/ (MODEL_PATH, older bundles) gets a blank-image smoke test instead,
+and /health says so.
 """
 import hashlib
 import json
@@ -85,9 +91,60 @@ class Detector:
         return dets, conf
 
     def self_check(self):
-        """Readiness: one inference on a fixed blank image must run and return a list."""
+        """Smoke test: one inference on a fixed blank image must run and return a list."""
         dets, _ = self(Image.new("RGB", (self.imgsz, self.imgsz), (114, 114, 114)))
         return isinstance(dets, list)
+
+
+READY_IOU, READY_CONF_TOL, READY_MARGIN = 0.9, 0.05, 0.1
+
+
+def _box_iou(a, b):
+    ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+    iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+    inter = ix * iy
+    union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
+    return inter / union if union > 0 else 0.0
+
+
+def compare_detections(got, expected, conf):
+    """Problems (list of str) between detections and the recorded ones; empty = same behaviour.
+    Detections with confidence < conf + READY_MARGIN are optional on both sides (they sit next to the threshold)."""
+    firm = conf + READY_MARGIN
+    used, problems = set(), []
+    for e in sorted(expected, key=lambda d: -d["confidence"]):
+        best, bi = 0.0, -1
+        for i, g in enumerate(got):
+            if i not in used and g["class_id"] == e["class_id"]:
+                v = _box_iou(g["box_xyxy"], e["box_xyxy"])
+                if v > best:
+                    best, bi = v, i
+        if best >= READY_IOU and abs(got[bi]["confidence"] - e["confidence"]) <= READY_CONF_TOL:
+            used.add(bi)
+        elif e["confidence"] >= firm:
+            problems.append(f"expected {e['class_name']} {e['confidence']:.2f} not reproduced (best IoU {best:.2f})")
+    for i, g in enumerate(got):
+        if i not in used and g["confidence"] >= firm:
+            problems.append(f"unexpected {g['class_name']} {g['confidence']:.2f}")
+    return problems
+
+
+def readiness_check(det, model_dir=None):
+    """Run the startup check; returns a summary for /health, raises ModelLoadError if it fails."""
+    exp_file = Path(model_dir) / "readiness" / "expected.json" if model_dir else None
+    if exp_file is None or not exp_file.exists():
+        if not det.self_check():
+            raise ModelLoadError("readiness smoke test failed")
+        return {"check": "blank-image smoke test", "passed": True, "note": "this model has no readiness/ fixture"}
+    exp = json.loads(exp_file.read_text(encoding="utf-8"))
+    with Image.open(exp_file.parent / exp["image"]) as im:
+        image = im.convert("RGB")
+    got, _ = det(image, exp["conf"])
+    problems = compare_detections(got, exp["detections"], exp["conf"])
+    if problems:
+        raise ModelLoadError(f"readiness check failed on {exp['image']}: " + "; ".join(problems))
+    return {"check": "development image", "passed": True, "image": exp["image"], "source": exp.get("source"),
+            "expected_detections": len(exp["detections"]), "detections": len(got)}
 
 
 def _from_model_dir(d, info, verify=None):
@@ -107,8 +164,10 @@ def _from_model_dir(d, info, verify=None):
     if serving.get("classes_json_sha256") and sha256(d / "classes.json") != serving["classes_json_sha256"]:
         raise ModelLoadError("classes.json SHA-256 differs from serving.json")
     info.extra.update({k: serving.get(k) for k in ("arm", "seed", "source_run_tag")})
-    return Detector(weights, classes, conf=serving["conf_threshold"], nms_iou=serving.get("nms_iou", DEFAULT_NMS_IOU),
-                    imgsz=serving.get("imgsz", DEFAULT_IMGSZ), info=info)
+    det = Detector(weights, classes, conf=serving["conf_threshold"], nms_iou=serving.get("nms_iou", DEFAULT_NMS_IOU),
+                   imgsz=serving.get("imgsz", DEFAULT_IMGSZ), info=info)
+    det.readiness = readiness_check(det, d)      # while the model directory still exists (registry mode uses a temp dir)
+    return det
 
 
 def load_bundle(bundle_dir):
@@ -151,7 +210,9 @@ def load_from_path(weights, classes_file=None, conf=None):
     else:
         from ultralytics import YOLO
         classes = {int(k): v for k, v in YOLO(str(weights)).names.items()}
-    return Detector(weights, classes, conf=conf, info=info)
+    det = Detector(weights, classes, conf=conf, info=info)
+    det.readiness = readiness_check(det)
+    return det
 
 
 def load_from_env(env=None):
@@ -176,6 +237,4 @@ def load_from_env(env=None):
         det = load_from_path(path or REPO / "models/d1_yolov8n_best.pt", env.get("MODEL_CLASSES"), conf)
     if conf is not None:
         det.conf = conf
-    if not det.self_check():
-        raise ModelLoadError("readiness self-check failed")
     return det, time.perf_counter() - t0

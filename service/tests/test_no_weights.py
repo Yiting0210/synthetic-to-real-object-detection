@@ -97,3 +97,31 @@ def test_service_does_not_start_without_model(monkeypatch, tmp_path):
     with pytest.raises(ModelLoadError):
         with TestClient(app):
             pass
+
+
+# ---------- readiness comparison rule (no model needed) ----------
+
+def _d(cls, conf, box):
+    return {"class_id": cls, "class_name": f"OBJ{cls:03d}", "confidence": conf, "box_xyxy": box}
+
+
+def test_readiness_compare_accepts_same_output():
+    from service.model_loader import compare_detections
+    exp = [_d(6, 0.95, [10, 10, 100, 100]), _d(2, 0.88, [200, 50, 300, 160])]
+    got = [_d(2, 0.87, [201, 51, 301, 161]), _d(6, 0.96, [10, 11, 100, 101])]
+    assert compare_detections(got, exp, conf=0.7) == []
+
+
+def test_readiness_compare_flags_missing_wrong_and_extra():
+    from service.model_loader import compare_detections
+    exp = [_d(6, 0.95, [10, 10, 100, 100])]
+    assert compare_detections([], exp, 0.7)                                         # missing
+    assert compare_detections([_d(5, 0.95, [10, 10, 100, 100])], exp, 0.7)          # other class
+    assert compare_detections([_d(6, 0.95, [10, 10, 100, 100]), _d(3, 0.9, [0, 0, 5, 5])], exp, 0.7)   # extra, firm
+
+
+def test_readiness_compare_ignores_detections_next_to_threshold():
+    from service.model_loader import compare_detections
+    exp = [_d(6, 0.95, [10, 10, 100, 100]), _d(4, 0.72, [0, 0, 50, 50])]            # 0.72 < 0.7 + 0.1: optional
+    got = [_d(6, 0.95, [10, 10, 100, 100]), _d(9, 0.75, [300, 300, 340, 340])]      # new 0.75 detection: optional too
+    assert compare_detections(got, exp, conf=0.7) == []

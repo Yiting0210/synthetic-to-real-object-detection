@@ -49,6 +49,7 @@ def health():
     if det is None:
         raise HTTPException(503, "model not loaded")
     return {"status": "ready", "model": model_block(), "ready_seconds": STATE["ready_seconds"],
+            "readiness": getattr(det, "readiness", None),
             "confidence_threshold": det.conf, "nms_iou": det.nms_iou, "imgsz": det.imgsz,
             "runtime": "pytorch-cpu (ultralytics)", "n_classes": len(det.classes)}
 

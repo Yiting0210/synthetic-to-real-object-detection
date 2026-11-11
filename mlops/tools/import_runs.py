@@ -291,6 +291,22 @@ def model_card(r, sel, classes):
 """
 
 
+def refresh_real(c, rid, row, run_tag):
+    """Already-imported run: re-log test.real.* when metrics.json holds different values (e.g. after re-running
+    detection/src/eval_real_photos.py). The run, its artifacts and registry links stay; MLflow keeps the old value in the
+    metric history and shows the new one as latest."""
+    if not row:
+        return
+    now = int(datetime.now().timestamp() * 1000)
+    have = c.get_run(rid).data.metrics
+    new = [Metric(key(f"test.real.{k}"), float(row[col]), now, 0) for col, k in REAL_KEYS.items()
+           if col in row and have.get(key(f"test.real.{k}")) != float(row[col])]
+    if new:
+        c.log_batch(rid, metrics=new)
+        c.set_tag(rid, "real_photo_results", "logged as test.real.* (refreshed from detection/results/real_photos/metrics.json)")
+        print(f"  {run_tag}: refreshed {len(new)} real-photo metrics from metrics.json")
+
+
 def import_m2(c, force, mapping):
     real = real_photo_rows()
     for d in sorted(RUNS.glob(M2_PATTERN)):
@@ -301,6 +317,7 @@ def import_m2(c, force, mapping):
         run, rid = new_run(c, EXP_M2, r["run_id"], r["run_tag"], sel["decided_at"], force)
         mapping.append((EXP_M2, r["run_id"], r["run_tag"], rel(d), rid))
         if run is None:
+            refresh_real(c, rid, real.get((arm, seed)), r["run_tag"])
             continue
         ts = ms(sel["decided_at"])
         w = RunWriter(c, rid, ts)

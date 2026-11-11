@@ -214,9 +214,24 @@ python mlops/tools/import_runs.py
 mlflow ui --backend-store-uri sqlite:///mlops/store/mlflow.db --port 5000
 ```
 
+- **Re-evaluation check:** `mlops/tools/reevaluate.py` loads every registered version from the Model Registry and evaluates it again on this machine's CPU. It then compares the result with the metrics its training run logged:
+  - detectors: D1-test mAP@0.5 and mAP@0.5:0.95 (tolerance 0.01), and real-photo mAP@0.5 (tolerance 0.005)
+  - classifier: M1 test accuracy and macro-F1 (tolerance 0.004, about one image)
+  - Each check is logged in the MLflow experiment `re-evaluation`, and the version gets a `reeval_passed` tag. The summary is in [`mlops/logs/reevaluation.md`](mlops/logs/reevaluation.md).
+- **Report tables from MLflow:** `mlops/tools/export_tables.py` writes [`mlops/logs/tables_from_mlflow.md`](mlops/logs/tables_from_mlflow.md) from the store alone: M1 classifiers, open-set methods, the A/B/C ablation, real photos, and the registry. `--check` compares the ablation and real-photo tables cell by cell with the summaries generated from the run folders.
+
+```bash
+python mlops/tools/reevaluate.py
+```
+
+```bash
+python mlops/tools/export_tables.py --check
+```
+
 **Model registry and rollback.**
 
-- `mlops/tools/register_models.py` registers the arm A and arm B seed-42 detectors as versions 1 and 2 of `lab2real-detector`. Each version is tagged with the class-map, weights and manifest checksums, preprocessing, threshold, NMS and runtime.
+- `mlops/tools/register_models.py` registers the seed-42 detector of each arm as versions of `lab2real-detector`: v1 = arm A, v2 = arm B, v3 = arm C (for comparison, no alias). It also registers the M1 classifier (MobileNetV2) as v1 of `lab2real-classifier`, which is not served yet. Each version is tagged with the class-map, weights and manifest checksums, preprocessing, threshold, NMS and runtime.
+- **Readiness fixture:** each detector version's folder also holds `readiness/`, one D1-val (development) image plus `expected.json` with the detections that version gave on it, so every bundle carries it.
 - Aliases: `champion` is the version to serve; `previous` is the last good one. On registration `champion` → v2 (arm B, the best arm of the comparison), `previous` → v1.
 - `mlops/tools/export_bundle.py --alias champion --to-models` resolves the alias to a version number. It writes `model_bundles/lab2real-detector-v<N>/` with the files and a `bundle.json` holding the version, the source run and the SHA-256 of every file. `--to-models` also copies those weights to `models/` and writes `models/selection.json` from the source run, so the demo uses the same model.
 - `mlops/tools/rollback_demo.py`:
@@ -241,7 +256,8 @@ python mlops/tools/rollback_demo.py
   - `MODEL_BUNDLE`: an exported bundle; checksums are verified at startup.
   - `MODEL_ALIAS`: resolved in the local registry at startup.
   - `MODEL_PATH`: plain weights; also the fallback when the registry cannot be read.
-- The service only reports ready after the model loads and passes a self-check inference.
+- **Readiness check:** before the service reports ready, it loads the model and runs it on the bundle's `readiness/` image. It then compares the output with `expected.json`: same classes, box IoU ≥ 0.9, confidence within 0.05. Detections within 0.1 of the threshold may appear or vanish. `/health` shows the result.
+  - A model without `readiness/` (plain `MODEL_PATH`) gets a blank-image smoke test instead, and `/health` says so.
 
 ```bash
 MODEL_ALIAS=champion uvicorn service.app:app --port 8000
@@ -251,14 +267,15 @@ MODEL_ALIAS=champion uvicorn service.app:app --port 8000
 curl -F "file=@detection/data/real_photos/images/IMG_2291.jpg" http://127.0.0.1:8000/detect
 ```
 
-**Tests.** `pytest` (config in `pytest.ini`) runs `service/tests/`. Without weights (fresh clone) 12 tests run and the rest are skipped, with the reason printed:
+**Tests.** `pytest` (config in `pytest.ini`) runs `service/tests/`. Without weights (fresh clone) 15 tests run and the rest are skipped, with the reason printed:
 
-- `test_no_weights.py`: the copies in `models/` equal their sources in `classification/results/`, the class maps and `selection.json` are valid, and the loader rejects missing weights, non-bundles and tampered bundles
+- `test_no_weights.py`: the copies in `models/` equal their sources in `classification/results/`, the class maps and `selection.json` are valid, the loader rejects missing weights, non-bundles and tampered bundles, and the readiness comparison rule behaves as documented
 - `test_demo_parity.py` (needs `models/d1_yolov8n_best.pt`): `demo/predict.py` and the service return the same objects for the same photo and threshold
 - `test_service.py` (needs the arm B seed-42 run folder in `runs/`): the API on fixed photos from `detection/data/real_photos/images` against their hand-drawn labels:
   - original-coordinate boxes, EXIF rotation and empty scenes
   - invalid or corrupt images, class-map mismatch and a missing model
   - tampered bundles, alias resolution and the path fallback
+  - the readiness check: passes on an exported bundle, and refuses a bundle whose recorded output the model does not reproduce
 
 ```bash
 pytest

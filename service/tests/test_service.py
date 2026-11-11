@@ -204,3 +204,39 @@ def test_unknown_alias_falls_back_to_path(monkeypatch, tmp_path):
            "MLFLOW_TRACKING_URI": "sqlite:///" + (tmp_path / "empty.db").as_posix()}
     with make_client(monkeypatch, env) as c:
         assert c.get("/health").json()["model"]["source"] == "path"
+
+
+# ---------- readiness check (proposal §7.7) ----------
+
+V2_BUNDLE = REPO / "model_bundles/lab2real-detector-v2"
+
+
+def test_path_mode_reports_smoke_test_readiness(client):
+    r = client.get("/health").json()["readiness"]
+    assert r["check"] == "blank-image smoke test" and r["passed"]
+
+
+@pytest.mark.skipif(not (V2_BUNDLE / "readiness/expected.json").exists(),
+                    reason="no exported bundle with a readiness fixture (mlops/tools/export_bundle.py --version 2)")
+def test_bundle_readiness_runs_development_image(monkeypatch):
+    with make_client(monkeypatch, {"MODEL_BUNDLE": str(V2_BUNDLE)}) as c:
+        r = c.get("/health").json()["readiness"]
+        assert r["check"] == "development image" and r["passed"] and r["image"].startswith("d1_val_")
+        assert r["detections"] >= 1
+
+
+@pytest.mark.skipif(not (V2_BUNDLE / "readiness/expected.json").exists(), reason="no exported bundle with a readiness fixture")
+def test_readiness_fails_when_output_differs(tmp_path):
+    """Valid checksums but a recorded output the model does not reproduce → the service must not become ready."""
+    from service.model_loader import ModelLoadError, load_bundle, sha256
+    b = tmp_path / "lab2real-detector-v9"
+    shutil.copytree(V2_BUNDLE, b)
+    exp = json.loads((b / "readiness/expected.json").read_text(encoding="utf-8"))
+    for d in exp["detections"]:
+        d["box_xyxy"] = [v + 40 for v in d["box_xyxy"]]            # shifted: IoU with the real output drops below 0.9
+    (b / "readiness/expected.json").write_text(json.dumps(exp), encoding="utf-8")
+    meta = json.loads((b / "bundle.json").read_text(encoding="utf-8"))
+    meta["files_sha256"] = {p.relative_to(b).as_posix(): sha256(p) for p in b.rglob("*") if p.is_file() and p.name != "bundle.json"}
+    (b / "bundle.json").write_text(json.dumps(meta), encoding="utf-8")
+    with pytest.raises(ModelLoadError, match="readiness check failed"):
+        load_bundle(b)
